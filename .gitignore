@@ -1,0 +1,11 @@
+build/
+.cache/
+compile_commands.json
+*.user
+*.qmlc
+*.jsc
+CTestTestfile.cmake
+CMakeCache.txt
+CMakeFiles/
+Testing/
+
