@@ -56,7 +56,7 @@ public:
     int viewportHeight() const;
     double devicePixelRatio() const;
     QString userAgent() const;
-    void setProfile(const DeviceProfile& profile);
+    virtual void setProfile(const DeviceProfile& profile);
 
     virtual void start();
     virtual void stop();

@@ -1,12 +1,33 @@
 import QtQuick
+import QtQuick.Controls
 import QtQuick.Layouts
 import Hesh 1.0
+
+pragma ComponentBehavior: Bound
 
 Item {
     id: root
 
     property var device
     property var manager
+    property string selectedFit: "Fit"
+    readonly property var fitChoices: ["Fit", "25%", "50%", "75%", "100%", "125%"]
+    readonly property var deviceFrame: frameLoader.item
+
+    function applyFit(choice) {
+        root.selectedFit = choice
+        if (!frameLoader.item)
+            return
+        if (choice === "Fit")
+            frameLoader.item.useFit()
+        else
+            frameLoader.item.setScale(Number(choice.replace("%", "")) / 100.0)
+    }
+
+    function returnToEmbedded() {
+        if (root.manager && root.device)
+            root.manager.returnToEmbedded(root.device.id)
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -14,14 +35,14 @@ Item {
 
         RowLayout {
             Layout.fillWidth: true
-            Layout.preferredHeight: 72
+            Layout.preferredHeight: 56
             Layout.leftMargin: 30
             Layout.rightMargin: 28
             spacing: 12
 
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: 4
+                spacing: 3
 
                 Text {
                     text: root.device ? root.device.name : ""
@@ -31,12 +52,23 @@ Item {
                 }
 
                 Text {
-                    text: root.device ? root.device.typeLabel + " DEVICE  /  " + root.device.profileName : ""
+                    text: root.device
+                          ? root.device.typeLabel + " DEVICE  /  " + root.device.profileName
+                          : ""
                     color: Theme.textMuted
                     font.pixelSize: 10
                     font.weight: Font.DemiBold
                     font.letterSpacing: 0.9
                 }
+            }
+
+            Text {
+                visible: root.device && root.device.presentationState === "Standalone"
+                text: "OPEN IN WINDOW"
+                color: Theme.accent
+                font.pixelSize: 9
+                font.weight: Font.DemiBold
+                font.letterSpacing: 0.9
             }
 
             IconButton {
@@ -62,21 +94,131 @@ Item {
             color: Theme.border
         }
 
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 48
+            Layout.leftMargin: 30
+            Layout.rightMargin: 28
+            spacing: 5
+
+            IconButton {
+                iconText: "‹"
+                tooltip: "Back"
+                enabled: frameLoader.item && frameLoader.item.canGoBack
+                onClicked: frameLoader.item.goBack()
+            }
+
+            IconButton {
+                iconText: "›"
+                tooltip: "Forward"
+                enabled: frameLoader.item && frameLoader.item.canGoForward
+                onClicked: frameLoader.item.goForward()
+            }
+
+            IconButton {
+                iconText: frameLoader.item && frameLoader.item.isLoading ? "×" : "↻"
+                tooltip: frameLoader.item && frameLoader.item.isLoading ? "Stop" : "Reload"
+                enabled: frameLoader.item !== null
+                onClicked: frameLoader.item.reloadOrStop()
+            }
+
+            TextField {
+                id: urlField
+                Layout.fillWidth: true
+                implicitHeight: 32
+                text: root.device ? root.device.url : ""
+                color: Theme.text
+                placeholderText: "Enter a URL"
+                placeholderTextColor: Theme.textFaint
+                font.pixelSize: 11
+                selectByMouse: true
+                inputMethodHints: Qt.ImhUrlCharactersOnly
+                leftPadding: 10
+                rightPadding: 10
+                background: Rectangle {
+                    radius: Theme.radiusSmall
+                    color: Theme.input
+                    border.width: 1
+                    border.color: parent.activeFocus ? Theme.accentStrong : Theme.border
+                }
+                onAccepted: {
+                    if (root.device) {
+                        root.device.url = text
+                        if (frameLoader.item)
+                            frameLoader.item.navigate()
+                    }
+                    focus = false
+                }
+            }
+
+            AppButton {
+                text: root.device && root.device.presentationState === "Standalone"
+                      ? "Return to Hesh" : "Open in Window"
+                compact: true
+                secondary: root.device && root.device.presentationState === "Standalone"
+                enabled: root.device !== null
+                onClicked: {
+                    if (!root.manager || !root.device)
+                        return
+                    if (root.device.presentationState === "Standalone")
+                        root.returnToEmbedded()
+                    else
+                        root.manager.openStandalone(root.device.id)
+                }
+            }
+        }
+
         Item {
-            id: stage
             Layout.fillWidth: true
             Layout.fillHeight: true
 
-            DeviceFrame {
-                id: deviceFrame
-                anchors.centerIn: parent
-                device: root.device
-                availableWidth: stage.width
-                availableHeight: stage.height
-                visible: root.device !== null
+            Item {
+                id: stage
+                anchors.fill: parent
 
-                Behavior on presentationScale {
-                    NumberAnimation { duration: 160; easing.type: Easing.OutCubic }
+                Loader {
+                    id: frameLoader
+                    anchors.centerIn: parent
+                    active: root.device !== null && root.device.presentationState !== "Standalone"
+                    sourceComponent: DeviceFrame {
+                        device: root.device
+                        availableWidth: stage.width
+                        availableHeight: stage.height
+                        devToolsVisible: false
+                    }
+                    onItemChanged: root.applyFit(root.selectedFit)
+                }
+
+                Column {
+                    anchors.centerIn: parent
+                    width: Math.min(parent.width - 40, 360)
+                    spacing: 12
+                    visible: root.device && root.device.presentationState === "Standalone"
+
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: root.device ? root.device.name + " is open in a separate window" : ""
+                        color: Theme.text
+                        font.pixelSize: 14
+                        font.weight: Font.Medium
+                    }
+
+                    Text {
+                        width: parent.width
+                        horizontalAlignment: Text.AlignHCenter
+                        text: "The live device surface is detached from this workspace."
+                        color: Theme.textMuted
+                        wrapMode: Text.WordWrap
+                        font.pixelSize: 11
+                    }
+
+                    AppButton {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: "Return to Hesh"
+                        secondary: true
+                        compact: true
+                        onClicked: root.returnToEmbedded()
+                    }
                 }
             }
         }
@@ -92,18 +234,20 @@ Item {
                 anchors.fill: parent
                 anchors.leftMargin: 30
                 anchors.rightMargin: 28
-                spacing: 18
+                spacing: 8
 
                 Text {
                     Layout.fillWidth: true
                     text: root.device ? root.device.url : ""
                     color: Theme.textMuted
                     elide: Text.ElideMiddle
-                    font.pixelSize: 11
+                    font.pixelSize: 10
                 }
 
                 Text {
-                    text: root.device ? root.device.viewportWidth + " × " + root.device.viewportHeight : ""
+                    text: root.device
+                          ? root.device.logicalViewportWidth + " × " + root.device.logicalViewportHeight
+                          : ""
                     color: Theme.text
                     font.pixelSize: 11
                     font.weight: Font.Medium
@@ -112,22 +256,79 @@ Item {
                 Text {
                     text: root.device ? "DPR " + Number(root.device.devicePixelRatio).toFixed(2) : ""
                     color: Theme.textMuted
-                    font.pixelSize: 11
+                    font.pixelSize: 10
+                }
+
+                ComboBox {
+                    id: fitCombo
+                    implicitWidth: 74
+                    implicitHeight: 30
+                    model: root.fitChoices
+                    currentIndex: Math.max(0, root.fitChoices.indexOf(root.selectedFit))
+                    leftPadding: 8
+                    rightPadding: 22
+                    contentItem: Text {
+                        text: fitCombo.displayText
+                        color: Theme.textMuted
+                        verticalAlignment: Text.AlignVCenter
+                        font.pixelSize: 10
+                    }
+                    background: Rectangle {
+                        radius: Theme.radiusSmall
+                        color: Theme.input
+                        border.width: 1
+                        border.color: fitCombo.activeFocus ? Theme.accentStrong : Theme.border
+                    }
+                    onActivated: root.applyFit(currentText)
+                }
+
+                IconButton {
+                    iconText: "−"
+                    tooltip: "Zoom out"
+                    enabled: frameLoader.item !== null
+                    onClicked: frameLoader.item.zoomOut()
+                }
+
+                IconButton {
+                    iconText: "+"
+                    tooltip: "Zoom in"
+                    enabled: frameLoader.item !== null
+                    onClicked: frameLoader.item.zoomIn()
+                }
+
+                AppButton {
+                    text: root.device && root.device.orientation === "Landscape" ? "Portrait" : "Landscape"
+                    compact: true
+                    secondary: true
+                    enabled: root.device !== null
+                    onClicked: if (root.device) root.device.orientation = root.device.orientation === "Landscape" ? "Portrait" : "Landscape"
+                }
+
+                AppButton {
+                    text: frameLoader.item && frameLoader.item.devToolsVisible ? "Hide DevTools" : "DevTools"
+                    compact: true
+                    secondary: true
+                    enabled: frameLoader.item !== null
+                    onClicked: if (frameLoader.item) frameLoader.item.devToolsVisible = !frameLoader.item.devToolsVisible
                 }
 
                 Text {
-                    text: deviceFrame.presentationMode
-                    color: Theme.textMuted
-                    font.pixelSize: 11
-                }
-
-                Text {
-                    text: deviceFrame.presentationPercent + "%"
+                    text: frameLoader.item ? frameLoader.item.presentationMode + " · "
+                                                   + frameLoader.item.presentationPercent + "%" : ""
                     color: Theme.accent
-                    font.pixelSize: 11
+                    font.pixelSize: 10
                     font.weight: Font.DemiBold
                 }
             }
+        }
+    }
+
+    Connections {
+        target: root.device
+
+        function onUrlChanged() {
+            if (!urlField.activeFocus)
+                urlField.text = root.device ? root.device.url : ""
         }
     }
 }

@@ -26,6 +26,7 @@ public:
         DeviceStatusRole,
         DeviceProfileRole,
         DeviceUrlRole,
+        DevicePresentationRole,
     };
     Q_ENUM(Role)
 
@@ -67,10 +68,15 @@ public:
     Q_INVOKABLE void selectDevice(const QString& id);
     Q_INVOKABLE void startDevice(const QString& id);
     Q_INVOKABLE void stopDevice(const QString& id);
+    Q_INVOKABLE bool openStandalone(const QString& id);
+    Q_INVOKABLE void returnToEmbedded(const QString& id);
+    Q_INVOKABLE bool isStandalone(const QString& id) const;
 
 signals:
     void selectedDeviceChanged();
     void deviceCountChanged();
+    void standaloneRequested(WebDevice* device);
+    void embeddedRequested(WebDevice* device);
 
 private:
     void load();

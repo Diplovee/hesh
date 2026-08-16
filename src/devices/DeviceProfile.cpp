@@ -61,6 +61,7 @@ QJsonObject deviceRecordToJson(const DeviceRecord& record)
         {QStringLiteral("type"), record.type},
         {QStringLiteral("profile"), record.profileName},
         {QStringLiteral("url"), record.url},
+        {QStringLiteral("orientation"), record.orientation},
     };
 }
 
@@ -78,6 +79,7 @@ std::optional<DeviceRecord> deviceRecordFromJson(const QJsonObject& object)
     record.type = object.value(QStringLiteral("type")).toString(QStringLiteral("web"));
     record.profileName = object.value(QStringLiteral("profile")).toString(QStringLiteral("Pixel 7"));
     record.url = object.value(QStringLiteral("url")).toString(QStringLiteral("http://localhost:3000"));
+    record.orientation = object.value(QStringLiteral("orientation")).toString(QStringLiteral("portrait"));
     return record;
 }
 

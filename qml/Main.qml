@@ -16,6 +16,7 @@ ApplicationWindow {
     color: Theme.window
     flags: Qt.Window | Qt.FramelessWindowHint
     title: "Hesh"
+    property var standaloneWindows: ({})
 
     property bool maximized: false
     function toggleMaximize() {
@@ -28,11 +29,64 @@ ApplicationWindow {
         }
     }
 
+    function createStandaloneWindow(device) {
+        if (!device || standaloneWindows[device.id])
+            return
+
+        const created = standaloneWindowComponent.createObject(null, {
+            "device": device,
+            "manager": deviceManager
+        })
+        if (!created) {
+            deviceManager.returnToEmbedded(device.id)
+            return
+        }
+        standaloneWindows[device.id] = created
+    }
+
+    function destroyStandaloneWindow(device) {
+        if (!device)
+            return
+        const existing = standaloneWindows[device.id]
+        if (!existing)
+            return
+        delete standaloneWindows[device.id]
+        existing.destroy()
+    }
+
+    function closeStandaloneWindows() {
+        const ids = Object.keys(standaloneWindows)
+        for (let index = 0; index < ids.length; ++index) {
+            const existing = standaloneWindows[ids[index]]
+            if (existing)
+                existing.close()
+        }
+    }
+
     Component.onCompleted: {
         if (Qt.application.arguments.indexOf("--maximized") >= 0) {
             showMaximized()
             maximized = true
         }
+    }
+
+    onClosing: window.closeStandaloneWindows()
+
+    Connections {
+        target: deviceManager
+
+        function onStandaloneRequested(device) {
+            window.createStandaloneWindow(device)
+        }
+
+        function onEmbeddedRequested(device) {
+            window.destroyStandaloneWindow(device)
+        }
+    }
+
+    Component {
+        id: standaloneWindowComponent
+        StandaloneDeviceWindow {}
     }
 
     Rectangle {
@@ -184,7 +238,7 @@ ApplicationWindow {
                     anchors.rightMargin: 18
 
                     Text {
-                        text: deviceManager.deviceCount > 0 ? "Hesh  •  Web device ready" : "Hesh  •  Ready to create a device"
+                        text: deviceManager.deviceCount > 0 ? "Hesh  •  Web runtime ready" : "Hesh  •  Ready to create a device"
                         color: Theme.textFaint
                         font.pixelSize: 10
                     }
@@ -192,13 +246,13 @@ ApplicationWindow {
                     Item { Layout.fillWidth: true }
 
                     Text {
-                        text: "Phase 1"
+                        text: "Phase 2"
                         color: Theme.textFaint
                         font.pixelSize: 10
                     }
 
                     Text {
-                        text: "DevTools  ↗"
+                        text: "Native device windows  ↗"
                         color: Theme.textMuted
                         font.pixelSize: 10
                         font.weight: Font.Medium

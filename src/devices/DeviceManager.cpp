@@ -44,6 +44,10 @@ QVariant DeviceListModel::data(const QModelIndex& index, int role) const
         const auto* webDevice = qobject_cast<const WebDevice*>(device);
         return webDevice ? webDevice->url() : QString {};
     }
+    case DevicePresentationRole: {
+        const auto* webDevice = qobject_cast<const WebDevice*>(device);
+        return webDevice ? webDevice->presentationState() : QStringLiteral("Embedded");
+    }
     case Qt::DisplayRole:
         return device->name();
     default:
@@ -62,6 +66,7 @@ QHash<int, QByteArray> DeviceListModel::roleNames() const
         {DeviceStatusRole, "deviceStatus"},
         {DeviceProfileRole, "deviceProfile"},
         {DeviceUrlRole, "deviceUrl"},
+        {DevicePresentationRole, "devicePresentationState"},
     };
 }
 
@@ -129,7 +134,7 @@ WebDevice* DeviceManager::createWebDevice(const QString& requestedName,
         : requestedName.trimmed();
     const auto url = requestedUrl.trimmed().isEmpty()
         ? QStringLiteral("http://localhost:3000")
-        : requestedUrl.trimmed();
+        : WebDevice::normalizeUrl(requestedUrl);
     const auto profile = DeviceProfile::fromName(profileName);
     auto* device = new WebDevice(
         QUuid::createUuid().toString(QUuid::WithoutBraces), name, profile, url, this);
@@ -147,6 +152,9 @@ void DeviceManager::removeDevice(const QString& id)
     }
 
     const auto row = m_model.indexOf(device);
+    if (auto* webDevice = qobject_cast<WebDevice*>(device); webDevice && webDevice->isStandalone()) {
+        returnToEmbedded(id);
+    }
     const bool wasSelected = device == m_selectedDevice;
     if (wasSelected) {
         Device* replacement = nullptr;
@@ -185,6 +193,33 @@ void DeviceManager::stopDevice(const QString& id)
     }
 }
 
+bool DeviceManager::openStandalone(const QString& id)
+{
+    auto* device = qobject_cast<WebDevice*>(findById(id));
+    if (!device || device->isStandalone()) {
+        return false;
+    }
+    device->setPresentationState(WebDevice::PresentationState::Standalone);
+    emit standaloneRequested(device);
+    return true;
+}
+
+void DeviceManager::returnToEmbedded(const QString& id)
+{
+    auto* device = qobject_cast<WebDevice*>(findById(id));
+    if (!device || !device->isStandalone()) {
+        return;
+    }
+    device->setPresentationState(WebDevice::PresentationState::Embedded);
+    emit embeddedRequested(device);
+}
+
+bool DeviceManager::isStandalone(const QString& id) const
+{
+    const auto* device = qobject_cast<const WebDevice*>(findById(id));
+    return device && device->isStandalone();
+}
+
 void DeviceManager::load()
 {
     if (!m_settings) {
@@ -202,6 +237,7 @@ void DeviceManager::load()
                                      DeviceProfile::fromName(record.profileName),
                                      record.url,
                                      this);
+        device->setOrientation(record.orientation);
         addDevice(device, false);
         device->start();
     }
@@ -251,6 +287,7 @@ void DeviceManager::persist() const
         record.profileName = device->profileName();
         if (const auto* webDevice = qobject_cast<const WebDevice*>(device)) {
             record.url = webDevice->url();
+            record.orientation = webDevice->orientation().toLower();
         }
         records.append(record);
     }

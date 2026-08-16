@@ -5,7 +5,7 @@ web devices, with a future path to real Android virtual devices. It is a
 native Qt 6 application: QML owns presentation while modern C++ owns
 application state, device lifecycle, profiles, and persistence.
 
-## Phase 1 status
+## Phase 2 status
 
 Implemented:
 
@@ -17,13 +17,25 @@ Implemented:
 - Embedded Qt WebEngine web-device preview
 - Logical viewport sizing kept separate from visual workspace scaling
 - QSettings-backed persistence for devices and selected device
-- Core Qt Test coverage for creation, removal, selection, profiles, and persistence
+- Compact navigation, URL, zoom, fit, rotation, and DevTools controls
+- Per-device persistent WebEngine profiles for cookies, storage, cache, and UA
+- Device-scoped standalone native Qt windows with return-on-close behavior
+- Raw-viewport standalone clients with no device bezel or label, fitted to the
+  available desktop work area, with a right-click Hesh context menu for controls
+- Core Qt Test coverage for URL normalization, orientation, presentation lifecycle,
+  profile identity, deletion while detached, and persistence
 
-Not implemented yet:
+Known limitations:
 
 - Android devices, QEMU, KVM, ADB, APK installation, images, or snapshots
-- Standalone native device windows
-- Browser toolbar and full developer tools integration
+- Live JavaScript/page-memory preservation across a presentation switch; the
+  current Qt Quick implementation recreates the visual WebEngineView and
+  restores the URL against the same persistent profile
+- Qt WebEngine user-agent changes apply to the shared profile and are followed
+  by a reload; pages that cache UA-dependent behavior may need a new navigation
+- Wayland compositor workspace assignment remains compositor-controlled;
+  Hyprland's Hesh rule floats and centers standalone clients while preserving
+  their native device dimensions
 - Project-local configuration or remote device management
 
 ## Requirements
@@ -39,7 +51,7 @@ Not implemented yet:
   - WebEngineQuick
   - Test
 
-Qt WebEngine is enabled in Phase 1 because the first Web Device is functional
+Qt WebEngine is enabled because the Web Device runtime is functional
 and needs an actual embedded browser surface.
 
 ## Build and run
@@ -64,6 +76,12 @@ On a Wayland compositor such as Hyprland, the application uses a frameless
 Qt Quick window and calls the compositor's system move operation for titlebar
 dragging. XWayland remains available through Qt's normal platform handling.
 
+The active Hyprland integration is kept in `~/.config/hypr/hesh.lua`. It
+matches only the hidden `Hesh Device <width>x<height>` title token and opens
+those clients as floating windows while inheriting the normal Hyprland
+decoration and window border. The rule also clamps the requested viewport to
+the compositor's reserved Waybar, dock, and panel area.
+
 ## Architecture
 
 ```text
@@ -86,9 +104,8 @@ boundary.
 
 ### Phase 2 — Web Device Runtime + standalone windows
 
-Prove the browser runtime boundary further, add robust loading/error states,
-host controls, and allow a device to be presented in its own native window
-without changing `DeviceManager`.
+Implemented in this checkout. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+for the runtime/profile/presentation decisions.
 
 ### Phase 3 — QEMU/KVM Android runtime prototype
 

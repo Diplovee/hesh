@@ -19,6 +19,13 @@ private slots:
     void selectDevice();
     void profileAssignment();
     void persistenceRoundTrip();
+    void urlNormalization();
+    void orientationChangesLogicalViewport();
+    void presentationLifecycle();
+    void standaloneDeviceDimensions();
+    void multipleStandaloneDevices();
+    void profileIdentityIsPerDevice();
+    void deletionWhileDetached();
 };
 
 void DeviceTests::createWebDevice()
@@ -103,9 +110,10 @@ void DeviceTests::persistenceRoundTrip()
     {
         Settings settings(QStringLiteral("HeshTests"), QStringLiteral("Persistence"), settingsPath);
         DeviceManager manager(&settings);
-        manager.createWebDevice(QStringLiteral("Persisted"),
-                                QStringLiteral("Galaxy S24"),
-                                QStringLiteral("http://localhost:4173"));
+        auto* persisted = manager.createWebDevice(QStringLiteral("Persisted"),
+                                                  QStringLiteral("Galaxy S24"),
+                                                  QStringLiteral("http://localhost:4173"));
+        persisted->setOrientation(QStringLiteral("Landscape"));
     }
 
     Settings reloadedSettings(QStringLiteral("HeshTests"), QStringLiteral("Persistence"), settingsPath);
@@ -117,6 +125,146 @@ void DeviceTests::persistenceRoundTrip()
     const auto* webDevice = qobject_cast<const WebDevice*>(reloaded.selectedDevice());
     QVERIFY(webDevice != nullptr);
     QCOMPARE(webDevice->url(), QStringLiteral("http://localhost:4173"));
+    QCOMPARE(webDevice->orientation(), QStringLiteral("Landscape"));
+    QCOMPARE(webDevice->logicalViewportWidth(), 780);
+    QCOMPARE(webDevice->logicalViewportHeight(), 360);
+}
+
+void DeviceTests::urlNormalization()
+{
+    QCOMPARE(WebDevice::normalizeUrl(QStringLiteral("localhost:3000")),
+             QStringLiteral("http://localhost:3000"));
+    QCOMPARE(WebDevice::normalizeUrl(QStringLiteral("localhost:5173/app?tab=preview#mobile")),
+             QStringLiteral("http://localhost:5173/app?tab=preview#mobile"));
+    QCOMPARE(WebDevice::normalizeUrl(QStringLiteral("127.0.0.1:3000")),
+             QStringLiteral("http://127.0.0.1:3000"));
+    QCOMPARE(WebDevice::normalizeUrl(QStringLiteral("http://localhost:3000/?x=1#preview")),
+             QStringLiteral("http://localhost:3000/?x=1#preview"));
+    QCOMPARE(WebDevice::normalizeUrl(QStringLiteral("https://example.com/path?q=1#section")),
+             QStringLiteral("https://example.com/path?q=1#section"));
+}
+
+void DeviceTests::orientationChangesLogicalViewport()
+{
+    WebDevice device(QStringLiteral("orientation-test"),
+                     QStringLiteral("Orientation test"),
+                     DeviceProfile::fromName(QStringLiteral("Pixel 7")),
+                     {});
+
+    QCOMPARE(device.orientation(), QStringLiteral("Portrait"));
+    QCOMPARE(device.logicalViewportWidth(), 412);
+    QCOMPARE(device.logicalViewportHeight(), 915);
+
+    device.setOrientation(QStringLiteral("Landscape"));
+    QCOMPARE(device.orientation(), QStringLiteral("Landscape"));
+    QCOMPARE(device.logicalViewportWidth(), 915);
+    QCOMPARE(device.logicalViewportHeight(), 412);
+
+    device.setOrientation(QStringLiteral("Portrait"));
+    QCOMPARE(device.logicalViewportWidth(), 412);
+    QCOMPARE(device.logicalViewportHeight(), 915);
+}
+
+void DeviceTests::presentationLifecycle()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    Settings settings(QStringLiteral("HeshTests"), QStringLiteral("Presentation"),
+                      directory.filePath(QStringLiteral("settings.ini")));
+    DeviceManager manager(&settings);
+    auto* device = manager.createWebDevice(QStringLiteral("Detached"),
+                                           QStringLiteral("Pixel 7"),
+                                           {});
+    QVERIFY(device != nullptr);
+    QCOMPARE(device->presentationState(), QStringLiteral("Embedded"));
+
+    QVERIFY(manager.openStandalone(device->id()));
+    QCOMPARE(device->presentationState(), QStringLiteral("Standalone"));
+    QVERIFY(!manager.openStandalone(device->id()));
+
+    manager.returnToEmbedded(device->id());
+    QCOMPARE(device->presentationState(), QStringLiteral("Embedded"));
+    manager.returnToEmbedded(device->id());
+    QCOMPARE(device->presentationState(), QStringLiteral("Embedded"));
+}
+
+void DeviceTests::standaloneDeviceDimensions()
+{
+    WebDevice pixel(QStringLiteral("pixel-window"),
+                    QStringLiteral("Pixel window"),
+                    DeviceProfile::fromName(QStringLiteral("Pixel 7")),
+                    {});
+
+    // Standalone windows expose only the logical viewport; the embedded host
+    // may add presentation chrome around the same device.
+    QCOMPARE(pixel.logicalViewportWidth(), 412);
+    QCOMPARE(pixel.logicalViewportHeight(), 915);
+
+    pixel.setOrientation(QStringLiteral("Landscape"));
+    QCOMPARE(pixel.logicalViewportWidth(), 915);
+    QCOMPARE(pixel.logicalViewportHeight(), 412);
+}
+
+void DeviceTests::multipleStandaloneDevices()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    Settings settings(QStringLiteral("HeshTests"), QStringLiteral("MultiplePresentation"),
+                      directory.filePath(QStringLiteral("settings.ini")));
+    DeviceManager manager(&settings);
+    auto* pixel = manager.createWebDevice(QStringLiteral("Pixel"), QStringLiteral("Pixel 7"), {});
+    auto* iphone = manager.createWebDevice(QStringLiteral("iPhone"), QStringLiteral("iPhone 14"), {});
+    QVERIFY(pixel != nullptr);
+    QVERIFY(iphone != nullptr);
+
+    QVERIFY(manager.openStandalone(pixel->id()));
+    QVERIFY(manager.openStandalone(iphone->id()));
+    QVERIFY(manager.isStandalone(pixel->id()));
+    QVERIFY(manager.isStandalone(iphone->id()));
+    QVERIFY(!manager.openStandalone(pixel->id()));
+
+    manager.returnToEmbedded(pixel->id());
+    QVERIFY(!manager.isStandalone(pixel->id()));
+    QVERIFY(manager.isStandalone(iphone->id()));
+    manager.returnToEmbedded(iphone->id());
+}
+
+void DeviceTests::profileIdentityIsPerDevice()
+{
+    WebDevice first(QStringLiteral("profile-a"),
+                    QStringLiteral("First"),
+                    DeviceProfile::fromName(QStringLiteral("Pixel 7")),
+                    {});
+    WebDevice second(QStringLiteral("profile-b"),
+                     QStringLiteral("Second"),
+                     DeviceProfile::fromName(QStringLiteral("Pixel 7")),
+                     {});
+
+    QVERIFY(first.profileStoragePath().contains(QStringLiteral("profile-a")));
+    QVERIFY(second.profileStoragePath().contains(QStringLiteral("profile-b")));
+    QVERIFY(first.profileStoragePath() != second.profileStoragePath());
+}
+
+void DeviceTests::deletionWhileDetached()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    Settings settings(QStringLiteral("HeshTests"), QStringLiteral("DetachedRemoval"),
+                      directory.filePath(QStringLiteral("settings.ini")));
+    DeviceManager manager(&settings);
+    auto* device = manager.createWebDevice(QStringLiteral("Remove me"),
+                                           QStringLiteral("Pixel 7"),
+                                           {});
+    QVERIFY(device != nullptr);
+    QVERIFY(manager.openStandalone(device->id()));
+    const auto id = device->id();
+
+    manager.removeDevice(id);
+    QCOMPARE(manager.deviceCount(), 0);
+    QVERIFY(!manager.isStandalone(id));
 }
 
 QTEST_MAIN(DeviceTests)

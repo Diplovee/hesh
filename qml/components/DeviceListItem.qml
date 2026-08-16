@@ -9,6 +9,7 @@ Item {
     required property string deviceName
     required property string deviceTypeLabel
     required property string deviceStatus
+    required property string devicePresentationState
     property var manager
     property bool selected: false
     signal activated()
@@ -77,8 +78,8 @@ Item {
 
                     Text {
                         Layout.fillWidth: true
-                        text: root.deviceStatus
-                        color: root.deviceStatus === "Running" ? Theme.success : Theme.textMuted
+                        text: root.devicePresentationState === "Standalone" ? "Standalone" : root.deviceStatus
+                        color: Theme.textMuted
                         elide: Text.ElideMiddle
                         font.pixelSize: 11
                     }
