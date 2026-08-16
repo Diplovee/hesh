@@ -84,6 +84,8 @@ qt_add_qml_module(hesh
     RESOURCES
         qml/theme/qmldir
         assets/icons/hesh.png
+        assets/icons/web-device.svg
+        assets/icons/android-device.svg
 )
 
 qt_add_executable(hesh_tests
