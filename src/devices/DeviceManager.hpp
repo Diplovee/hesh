@@ -6,6 +6,7 @@
 #include <QVariantList>
 
 #include "Device.hpp"
+#include "android/AndroidDevice.hpp"
 #include "web/WebDevice.hpp"
 
 namespace Hesh {
@@ -52,6 +53,7 @@ class DeviceManager final : public QObject
     Q_PROPERTY(Device* selectedDevice READ selectedDevice NOTIFY selectedDeviceChanged)
     Q_PROPERTY(int deviceCount READ deviceCount NOTIFY deviceCountChanged)
     Q_PROPERTY(QVariantList availableProfiles READ availableProfiles CONSTANT)
+    Q_PROPERTY(bool androidFeatureEnabled READ androidFeatureEnabled CONSTANT)
 
 public:
     explicit DeviceManager(Settings* settings, QObject* parent = nullptr);
@@ -60,10 +62,15 @@ public:
     Device* selectedDevice() const;
     int deviceCount() const;
     QVariantList availableProfiles() const;
+    bool androidFeatureEnabled() const;
 
     Q_INVOKABLE WebDevice* createWebDevice(const QString& name,
                                            const QString& profileName,
                                            const QString& url);
+    Q_INVOKABLE AndroidDevice* createAndroidDevice(const QString& name,
+                                                   const QString& profileName,
+                                                   const QString& avdName,
+                                                   const QString& adbSerial);
     Q_INVOKABLE void removeDevice(const QString& id);
     Q_INVOKABLE void selectDevice(const QString& id);
     Q_INVOKABLE void startDevice(const QString& id);

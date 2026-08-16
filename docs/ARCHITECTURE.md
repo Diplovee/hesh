@@ -12,7 +12,7 @@ Application
           ↓ QAbstractListModel + selectedDevice
        Device
         ├── WebDevice
-        └── AndroidDevice [future]
+        └── AndroidDevice
 ```
 
 ## Application ownership
@@ -35,9 +35,9 @@ profile identity, and presentation state. The model uses roles backed by actual
 `Device` objects, rather than two hardcoded device slots or a large collection
 of QVariant maps.
 
-Phase 1 supports the Web type. Android records are deliberately not created or
-emulated yet; the future type can be added without changing the manager's
-collection, selection, or model APIs.
+Web and Android records share the same collection, selection, lifecycle, and
+persistence APIs. Android-specific emulator configuration remains on
+`AndroidDevice` and `AndroidRuntime` rather than leaking into the base model.
 
 ## Profiles
 
@@ -128,7 +128,7 @@ Hyprland still owns workspace and monitor movement.
 DevTools are device-scoped: each frame connects its own page view to its own
 DevTools view, so inspecting one device does not retarget another device.
 
-## Future Android runtime
+## Android runtime
 
 The intended future boundary is:
 
@@ -137,15 +137,15 @@ AndroidDevice
       ↓
 AndroidRuntime
       ↓
-QEMU
+Android SDK emulator
       ↓
-KVM
+QEMU/KVM
 ```
 
-`AndroidRuntime` will eventually own QEMU process lifecycle, KVM detection,
-image selection, CPU/RAM/storage configuration, ADB connectivity, APK
-installation, and snapshots. None of those capabilities are present in Phase
-1, and `src/android/README.md` is documentation only.
+`AndroidRuntime` owns the SDK emulator process lifecycle, boot polling through
+ADB, scrcpy display startup, Android key events, rotation, and APK installation.
+Hesh expects the system image and AVD to be provisioned through the Android SDK;
+it does not bundle images or snapshots.
 
 ## Performance notes
 

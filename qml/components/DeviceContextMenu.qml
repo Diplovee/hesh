@@ -9,7 +9,11 @@ Popup {
     property var manager
     property string deviceId: ""
     property string deviceName: ""
+    property string deviceType: "web"
     property string deviceStatus: "Stopped"
+    readonly property bool deviceLocked: root.deviceType === "android"
+                                         && root.manager
+                                         && !root.manager.androidFeatureEnabled
 
     parent: Overlay.overlay
     width: 224
@@ -83,8 +87,10 @@ Popup {
                 anchors.left: parent.left
                 anchors.leftMargin: 10
                 anchors.verticalCenter: parent.verticalCenter
-                text: root.deviceStatus === "Running" ? "Stop Device" : "Start Device"
-                color: Theme.text
+                text: root.deviceLocked
+                      ? "Android runtime locked"
+                      : (root.deviceStatus === "Running" ? "Stop Device" : "Start Device")
+                color: root.deviceLocked ? Theme.textFaint : Theme.text
                 font.pixelSize: 12
             }
 
@@ -92,7 +98,8 @@ Popup {
                 id: toggleMouse
                 anchors.fill: parent
                 hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
+                enabled: !root.deviceLocked
+                cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                 onClicked: root.toggleDevice()
             }
         }

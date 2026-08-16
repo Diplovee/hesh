@@ -10,6 +10,7 @@ Item {
 
     property var device
     property var manager
+    readonly property bool isAndroid: root.device && root.device.type === "android"
     property string selectedFit: "Fit"
     readonly property var fitChoices: ["Fit", "25%", "50%", "75%", "100%", "125%"]
     readonly property var deviceFrame: frameLoader.item
@@ -63,7 +64,7 @@ Item {
             }
 
             Text {
-                visible: root.device && root.device.presentationState === "Standalone"
+                visible: !root.isAndroid && root.device && root.device.presentationState === "Standalone"
                 text: "OPEN IN WINDOW"
                 color: Theme.accent
                 font.pixelSize: 9
@@ -85,6 +86,7 @@ Item {
             manager: root.manager
             deviceId: root.device ? root.device.id : ""
             deviceName: root.device ? root.device.name : ""
+            deviceType: root.device ? root.device.type : "web"
             deviceStatus: root.device ? root.device.status : "Stopped"
         }
 
@@ -104,6 +106,7 @@ Item {
             IconButton {
                 iconText: "‹"
                 tooltip: "Back"
+                visible: !root.isAndroid
                 enabled: frameLoader.item && frameLoader.item.canGoBack
                 onClicked: frameLoader.item.goBack()
             }
@@ -111,6 +114,7 @@ Item {
             IconButton {
                 iconText: "›"
                 tooltip: "Forward"
+                visible: !root.isAndroid
                 enabled: frameLoader.item && frameLoader.item.canGoForward
                 onClicked: frameLoader.item.goForward()
             }
@@ -118,15 +122,17 @@ Item {
             IconButton {
                 iconText: frameLoader.item && frameLoader.item.isLoading ? "×" : "↻"
                 tooltip: frameLoader.item && frameLoader.item.isLoading ? "Stop" : "Reload"
+                visible: !root.isAndroid
                 enabled: frameLoader.item !== null
                 onClicked: frameLoader.item.reloadOrStop()
             }
 
             TextField {
                 id: urlField
+                visible: !root.isAndroid
                 Layout.fillWidth: true
                 implicitHeight: 32
-                text: root.device ? root.device.url : ""
+                text: !root.isAndroid && root.device ? root.device.url : ""
                 color: Theme.text
                 placeholderText: "Enter a URL"
                 placeholderTextColor: Theme.textFaint
@@ -152,10 +158,11 @@ Item {
             }
 
             AppButton {
-                text: root.device && root.device.presentationState === "Standalone"
+                visible: !root.isAndroid
+                text: !root.isAndroid && root.device && root.device.presentationState === "Standalone"
                       ? "Return to Hesh" : "Open in Window"
                 compact: true
-                secondary: root.device && root.device.presentationState === "Standalone"
+                secondary: !root.isAndroid && root.device && root.device.presentationState === "Standalone"
                 enabled: root.device !== null
                 onClicked: {
                     if (!root.manager || !root.device)
@@ -165,6 +172,30 @@ Item {
                     else
                         root.manager.openStandalone(root.device.id)
                 }
+            }
+
+            Text {
+                visible: root.isAndroid
+                Layout.fillWidth: true
+                text: root.manager && !root.manager.androidFeatureEnabled
+                      ? "LOCKED  ·  resource limit"
+                      : (root.device
+                         ? root.device.runtimeState + "  ·  " + root.device.adbSerial
+                         : "Android runtime")
+                color: root.manager && !root.manager.androidFeatureEnabled
+                       ? Theme.warning
+                       : (root.device && root.device.status === "Error" ? Theme.error : Theme.textMuted)
+                elide: Text.ElideMiddle
+                font.pixelSize: 11
+            }
+
+            AppButton {
+                visible: root.isAndroid
+                text: "Open Android Display"
+                compact: true
+                enabled: root.device && root.device.booted
+                         && root.manager && root.manager.androidFeatureEnabled
+                onClicked: if (root.device) root.device.openDisplay()
             }
         }
 
@@ -179,21 +210,38 @@ Item {
                 Loader {
                     id: frameLoader
                     anchors.centerIn: parent
-                    active: root.device !== null && root.device.presentationState !== "Standalone"
-                    sourceComponent: DeviceFrame {
+                    active: root.isAndroid || (root.device && root.device.presentationState !== "Standalone")
+                    sourceComponent: root.isAndroid ? androidFrameComponent : webFrameComponent
+                    onItemChanged: root.applyFit(root.selectedFit)
+                }
+
+                Component {
+                    id: webFrameComponent
+
+                    DeviceFrame {
                         device: root.device
                         availableWidth: stage.width
                         availableHeight: stage.height
                         devToolsVisible: false
                     }
-                    onItemChanged: root.applyFit(root.selectedFit)
+                }
+
+                Component {
+                    id: androidFrameComponent
+
+                    AndroidFrame {
+                        device: root.device
+                        manager: root.manager
+                        availableWidth: stage.width
+                        availableHeight: stage.height
+                    }
                 }
 
                 Column {
                     anchors.centerIn: parent
                     width: Math.min(parent.width - 40, 360)
                     spacing: 12
-                    visible: root.device && root.device.presentationState === "Standalone"
+                    visible: !root.isAndroid && root.device && root.device.presentationState === "Standalone"
 
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
@@ -238,7 +286,9 @@ Item {
 
                 Text {
                     Layout.fillWidth: true
-                    text: root.device ? root.device.url : ""
+                    text: root.isAndroid
+                          ? (root.device ? root.device.avdName : "")
+                          : (root.device ? root.device.url : "")
                     color: Theme.textMuted
                     elide: Text.ElideMiddle
                     font.pixelSize: 10
@@ -246,7 +296,9 @@ Item {
 
                 Text {
                     text: root.device
-                          ? root.device.logicalViewportWidth + " × " + root.device.logicalViewportHeight
+                          ? (root.isAndroid
+                             ? root.device.viewportWidth + " × " + root.device.viewportHeight
+                             : root.device.logicalViewportWidth + " × " + root.device.logicalViewportHeight)
                           : ""
                     color: Theme.text
                     font.pixelSize: 11
@@ -261,6 +313,7 @@ Item {
 
                 ComboBox {
                     id: fitCombo
+                    visible: !root.isAndroid
                     implicitWidth: 74
                     implicitHeight: 30
                     model: root.fitChoices
@@ -284,6 +337,7 @@ Item {
 
                 IconButton {
                     iconText: "−"
+                    visible: !root.isAndroid
                     tooltip: "Zoom out"
                     enabled: frameLoader.item !== null
                     onClicked: frameLoader.item.zoomOut()
@@ -291,12 +345,14 @@ Item {
 
                 IconButton {
                     iconText: "+"
+                    visible: !root.isAndroid
                     tooltip: "Zoom in"
                     enabled: frameLoader.item !== null
                     onClicked: frameLoader.item.zoomIn()
                 }
 
                 AppButton {
+                    visible: !root.isAndroid
                     text: root.device && root.device.orientation === "Landscape" ? "Portrait" : "Landscape"
                     compact: true
                     secondary: true
@@ -305,6 +361,7 @@ Item {
                 }
 
                 AppButton {
+                    visible: !root.isAndroid
                     text: frameLoader.item && frameLoader.item.devToolsVisible ? "Hide DevTools" : "DevTools"
                     compact: true
                     secondary: true
@@ -313,8 +370,9 @@ Item {
                 }
 
                 Text {
-                    text: frameLoader.item ? frameLoader.item.presentationMode + " · "
-                                                   + frameLoader.item.presentationPercent + "%" : ""
+                    text: frameLoader.item
+                          ? frameLoader.item.presentationMode + " · "
+                            + frameLoader.item.presentationPercent + "%" : ""
                     color: Theme.accent
                     font.pixelSize: 10
                     font.weight: Font.DemiBold
@@ -324,7 +382,7 @@ Item {
     }
 
     Connections {
-        target: root.device
+        target: root.isAndroid ? null : root.device
 
         function onUrlChanged() {
             if (!urlField.activeFocus)

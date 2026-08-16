@@ -3,6 +3,7 @@
 #include <QTemporaryDir>
 
 #include "app/Settings.hpp"
+#include "android/AndroidDevice.hpp"
 #include "devices/DeviceManager.hpp"
 #include "devices/DeviceProfile.hpp"
 #include "web/WebDevice.hpp"
@@ -26,6 +27,9 @@ private slots:
     void multipleStandaloneDevices();
     void profileIdentityIsPerDevice();
     void deletionWhileDetached();
+    void androidDeviceConfiguration();
+    void androidFeatureLock();
+    void androidRecordRoundTrip();
 };
 
 void DeviceTests::createWebDevice()
@@ -265,6 +269,69 @@ void DeviceTests::deletionWhileDetached()
     manager.removeDevice(id);
     QCOMPARE(manager.deviceCount(), 0);
     QVERIFY(!manager.isStandalone(id));
+}
+
+void DeviceTests::androidDeviceConfiguration()
+{
+    AndroidDevice device(QStringLiteral("android-test"),
+                         QStringLiteral("Android test"),
+                         DeviceProfile::fromName(QStringLiteral("Pixel 7")),
+                         QStringLiteral("Pixel_7_API_35"),
+                         QStringLiteral("emulator-5556"));
+
+    QCOMPARE(device.typeName(), QStringLiteral("android"));
+    QCOMPARE(device.typeLabel(), QStringLiteral("ANDROID"));
+    QCOMPARE(device.avdName(), QStringLiteral("Pixel_7_API_35"));
+    QCOMPARE(device.adbSerial(), QStringLiteral("emulator-5556"));
+    QCOMPARE(device.runtimeState(), QStringLiteral("Stopped"));
+    QVERIFY(!device.booted());
+    QVERIFY(!device.displayAvailable());
+}
+
+void DeviceTests::androidFeatureLock()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    Settings settings(QStringLiteral("HeshTests"), QStringLiteral("AndroidLock"),
+                      directory.filePath(QStringLiteral("settings.ini")));
+    DeviceManager manager(&settings);
+    QVERIFY(!manager.androidFeatureEnabled());
+    QVERIFY(manager.createAndroidDevice(QStringLiteral("Locked Android"),
+                                        QStringLiteral("Pixel 7"),
+                                        QStringLiteral("Pixel_7_API_35"),
+                                        QStringLiteral("emulator-5554"))
+            == nullptr);
+
+    AndroidDevice device(QStringLiteral("android-lock-test"),
+                         QStringLiteral("Locked Android"),
+                         DeviceProfile::fromName(QStringLiteral("Pixel 7")),
+                         QStringLiteral("Pixel_7_API_35"),
+                         QStringLiteral("emulator-5554"));
+    QVERIFY(device.featureLocked());
+    device.start();
+    QCOMPARE(device.statusName(), QStringLiteral("Stopped"));
+    QVERIFY(!device.openDisplay());
+    QVERIFY(!device.sendHome());
+    QVERIFY(!device.installApk(QStringLiteral("/tmp/example.apk")));
+}
+
+void DeviceTests::androidRecordRoundTrip()
+{
+    DeviceRecord original;
+    original.id = QStringLiteral("android-record");
+    original.name = QStringLiteral("Persisted Android");
+    original.type = QStringLiteral("android");
+    original.profileName = QStringLiteral("Pixel 8");
+    original.avdName = QStringLiteral("Pixel_8_API_35");
+    original.adbSerial = QStringLiteral("emulator-5558");
+
+    const auto parsed = deviceRecordFromJson(deviceRecordToJson(original));
+    QVERIFY(parsed.has_value());
+    QCOMPARE(parsed->type, original.type);
+    QCOMPARE(parsed->profileName, original.profileName);
+    QCOMPARE(parsed->avdName, original.avdName);
+    QCOMPARE(parsed->adbSerial, original.adbSerial);
 }
 
 QTEST_MAIN(DeviceTests)

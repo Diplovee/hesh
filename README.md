@@ -1,7 +1,7 @@
 # Hesh
 
 Hesh is a lightweight Linux desktop environment for developing and testing
-web devices, with a future path to real Android virtual devices. It is a
+web devices and local Android virtual devices. It is a
 native Qt 6 application: QML owns presentation while modern C++ owns
 application state, device lifecycle, profiles, and persistence.
 
@@ -13,7 +13,7 @@ Implemented:
 - Custom Hesh dark developer-tool visual system
 - Dynamic C++ `DeviceManager` and `QAbstractListModel`
 - Web devices with built-in viewport profiles
-- Create-device flow with an explicit Android “Coming later” state
+- Create-device flow for Web and Android SDK AVD devices
 - Embedded Qt WebEngine web-device preview
 - Logical viewport sizing kept separate from visual workspace scaling
 - QSettings-backed persistence for devices and selected device
@@ -27,7 +27,8 @@ Implemented:
 
 Known limitations:
 
-- Android devices, QEMU, KVM, ADB, APK installation, images, or snapshots
+- Bundled Android images or snapshots; Android devices use an existing local
+  SDK AVD and emulator installation
 - Live JavaScript/page-memory preservation across a presentation switch; the
   current Qt Quick implementation recreates the visual WebEngineView and
   restores the URL against the same persistent profile
@@ -93,12 +94,18 @@ Application
           ↓
        Device
         ├── WebDevice
-        └── AndroidDevice [future]
+        └── AndroidDevice
 ```
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for ownership, persistence,
-logical viewport scaling, presentation hosts, and the planned Android runtime
-boundary.
+logical viewport scaling, presentation hosts, and the Android runtime boundary.
+See [docs/ANDROID_SETUP.md](docs/ANDROID_SETUP.md) for the Omarchy/Arch SDK,
+ADB, emulator, AVD, and scrcpy setup.
+
+The Android runtime is locked by default in version 0.2.1 because an emulator
+can exceed available system memory on lighter machines. The implementation is
+retained and can be explicitly enabled with `-DHESH_ENABLE_ANDROID=ON` when
+the host has enough resources.
 
 ## Roadmap
 
@@ -107,9 +114,8 @@ boundary.
 Implemented in this checkout. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 for the runtime/profile/presentation decisions.
 
-### Phase 3 — QEMU/KVM Android runtime prototype
+### Phase 3 — Android SDK AVD runtime
 
-Only after the device and presentation abstractions are proven, add a small
-Android runtime prototype around QEMU/KVM. That phase should establish process
-lifecycle and image contracts before ADB, APK, and snapshot features expand
-the scope.
+Implemented as a local AVD runtime. Hesh launches the SDK emulator, waits for
+boot through ADB, opens a scrcpy display when available, and exposes Android
+navigation, rotation, and APK-install runtime hooks.

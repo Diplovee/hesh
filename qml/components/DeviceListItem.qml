@@ -8,6 +8,7 @@ Item {
     required property string deviceId
     required property string deviceName
     required property string deviceTypeLabel
+    required property string deviceType
     required property string deviceStatus
     required property string devicePresentationState
     property var manager
@@ -112,6 +113,7 @@ Item {
         manager: root.manager
         deviceId: root.deviceId
         deviceName: root.deviceName
+        deviceType: root.deviceType
         deviceStatus: root.deviceStatus
     }
 }

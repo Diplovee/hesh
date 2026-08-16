@@ -9,12 +9,13 @@ Popup {
     property var manager
     property int step: 0
     property string selectedType: ""
+    readonly property bool androidFeatureEnabled: root.manager && root.manager.androidFeatureEnabled
 
     modal: true
     focus: true
     closePolicy: Popup.CloseOnEscape
     anchors.centerIn: Overlay.overlay
-    width: 420
+    width: Overlay.overlay ? Math.min(420, Overlay.overlay.width - 32) : 420
     height: step === 0 ? 300 : 500
     padding: 0
 
@@ -32,6 +33,8 @@ Popup {
         selectedType = ""
         nameField.text = "Pixel 7 Development"
         urlField.text = "http://localhost:3000"
+        avdField.text = ""
+        serialField.text = "emulator-5554"
         profileCombo.currentIndex = 0
     }
 
@@ -48,14 +51,20 @@ Popup {
             spacing: 3
 
             Text {
-                text: root.step === 0 ? "Create Device" : "Create Web Device"
+                text: root.step === 0
+                      ? "Create Device"
+                      : (root.selectedType === "android" ? "Create Android Device" : "Create Web Device")
                 color: Theme.text
                 font.pixelSize: 17
                 font.weight: Font.Medium
             }
 
             Text {
-                text: root.step === 0 ? "Choose a runtime for your next test surface." : "Set the viewport and starting URL."
+                text: root.step === 0
+                      ? "Choose a runtime for your next test surface."
+                      : (root.selectedType === "android"
+                         ? "Choose an AVD and Android runtime settings."
+                         : "Set the viewport and starting URL.")
                 color: Theme.textMuted
                 font.pixelSize: 11
             }
@@ -151,9 +160,12 @@ Popup {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     radius: Theme.radiusSmall
-                    color: Theme.panelRaised
-                    border.width: 1
-                    border.color: Theme.border
+                    opacity: root.androidFeatureEnabled ? 1.0 : 0.58
+                    color: root.androidFeatureEnabled && androidMouse.containsMouse
+                           ? Theme.accentSoft : Theme.panelRaised
+                    border.width: root.selectedType === "android" ? 1 : 1
+                    border.color: root.androidFeatureEnabled && root.selectedType === "android"
+                                  ? Theme.accentStrong : Theme.border
 
                     RowLayout {
                         anchors.fill: parent
@@ -192,8 +204,10 @@ Popup {
                             }
 
                             Text {
-                                text: "Native runtime"
-                                color: Theme.textFaint
+                                text: root.androidFeatureEnabled
+                                      ? "Native runtime"
+                                      : "Locked — resource limits"
+                                color: root.androidFeatureEnabled ? Theme.textFaint : Theme.warning
                                 wrapMode: Text.WordWrap
                                 font.pixelSize: 11
                             }
@@ -208,8 +222,8 @@ Popup {
 
                                 Text {
                                     anchors.centerIn: parent
-                                    text: "COMING LATER"
-                                    color: Theme.textFaint
+                                    text: root.androidFeatureEnabled ? "AVAILABLE" : "LOCKED"
+                                    color: root.androidFeatureEnabled ? Theme.accent : Theme.warning
                                     font.pixelSize: 8
                                     font.weight: Font.DemiBold
                                     font.letterSpacing: 0.6
@@ -217,7 +231,28 @@ Popup {
                             }
                         }
                     }
+
+                    MouseArea {
+                        id: androidMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        enabled: root.androidFeatureEnabled
+                        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                        onClicked: {
+                            root.selectedType = "android"
+                            root.step = 1
+                        }
+                    }
                 }
+            }
+
+            Text {
+                Layout.fillWidth: true
+                visible: !root.androidFeatureEnabled
+                text: "Android runtime is temporarily locked to protect system resources."
+                color: Theme.textFaint
+                wrapMode: Text.WordWrap
+                font.pixelSize: 10
             }
         }
 
@@ -298,6 +333,7 @@ Popup {
             }
 
             Text {
+                visible: root.selectedType === "web"
                 text: "URL"
                 color: Theme.textMuted
                 font.pixelSize: 11
@@ -306,6 +342,7 @@ Popup {
 
             TextField {
                 id: urlField
+                visible: root.selectedType === "web"
                 Layout.fillWidth: true
                 implicitHeight: 38
                 color: Theme.text
@@ -345,13 +382,69 @@ Popup {
                 Item { Layout.fillWidth: true }
 
                 Text {
+                    Layout.fillWidth: true
                     text: profileCombo.currentIndex >= 0 && root.manager
                           ? root.manager.availableProfiles[profileCombo.currentIndex].userAgent.split(" Chrome")[0]
                           : ""
                     color: Theme.textFaint
                     elide: Text.ElideRight
+                    horizontalAlignment: Text.AlignRight
                     font.pixelSize: 10
                 }
+            }
+
+            Text {
+                visible: root.selectedType === "android"
+                text: "Android Virtual Device (AVD)"
+                color: Theme.textMuted
+                font.pixelSize: 11
+                font.weight: Font.DemiBold
+            }
+
+            TextField {
+                id: avdField
+                visible: root.selectedType === "android"
+                Layout.fillWidth: true
+                implicitHeight: 38
+                color: Theme.text
+                placeholderText: "e.g. Pixel_7_API_35"
+                font.pixelSize: 12
+                selectByMouse: true
+                background: Rectangle {
+                    radius: Theme.radiusSmall
+                    color: Theme.input
+                    border.width: 1
+                    border.color: parent.activeFocus ? Theme.accentStrong : Theme.border
+                }
+                leftPadding: 12
+                rightPadding: 12
+            }
+
+            Text {
+                visible: root.selectedType === "android"
+                text: "ADB serial"
+                color: Theme.textMuted
+                font.pixelSize: 11
+                font.weight: Font.DemiBold
+            }
+
+            TextField {
+                id: serialField
+                visible: root.selectedType === "android"
+                Layout.fillWidth: true
+                implicitHeight: 38
+                color: Theme.text
+                placeholderText: "emulator-5554"
+                font.pixelSize: 12
+                selectByMouse: true
+                background: Rectangle {
+                    radius: Theme.radiusSmall
+                    color: Theme.input
+                    border.width: 1
+                    border.color: parent.activeFocus ? Theme.accentStrong : Theme.border
+                }
+                leftPadding: 12
+                rightPadding: 12
             }
         }
 
@@ -376,7 +469,16 @@ Popup {
                 compact: true
                 onClicked: {
                     if (root.manager) {
-                        root.manager.createWebDevice(nameField.text, profileCombo.currentText, urlField.text)
+                        if (root.selectedType === "android") {
+                            root.manager.createAndroidDevice(nameField.text,
+                                                             profileCombo.currentText,
+                                                             avdField.text,
+                                                             serialField.text)
+                        } else {
+                            root.manager.createWebDevice(nameField.text,
+                                                         profileCombo.currentText,
+                                                         urlField.text)
+                        }
                     }
                     root.close()
                 }

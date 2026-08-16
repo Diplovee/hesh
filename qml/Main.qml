@@ -238,7 +238,11 @@ ApplicationWindow {
                     anchors.rightMargin: 18
 
                     Text {
-                        text: deviceManager.deviceCount > 0 ? "Hesh  •  Web runtime ready" : "Hesh  •  Ready to create a device"
+                        text: deviceManager.deviceCount > 0
+                              ? (deviceManager.selectedDevice && deviceManager.selectedDevice.type === "android"
+                                 ? "Hesh  •  Android runtime"
+                                 : "Hesh  •  Web runtime ready")
+                              : "Hesh  •  Ready to create a device"
                         color: Theme.textFaint
                         font.pixelSize: 10
                     }

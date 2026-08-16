@@ -55,6 +55,7 @@ Rectangle {
                 manager: root.manager
                 selected: root.manager && root.manager.selectedDevice
                           && root.manager.selectedDevice.id === deviceId
+                deviceType: deviceType
                 devicePresentationState: devicePresentationState
                 onActivated: if (root.manager) root.manager.selectDevice(deviceId)
             }

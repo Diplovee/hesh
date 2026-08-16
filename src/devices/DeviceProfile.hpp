@@ -37,6 +37,8 @@ struct DeviceRecord
     QString profileName;
     QString url;
     QString orientation = QStringLiteral("portrait");
+    QString avdName;
+    QString adbSerial;
 };
 
 QJsonObject deviceRecordToJson(const DeviceRecord& record);

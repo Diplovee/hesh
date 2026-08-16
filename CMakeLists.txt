@@ -1,10 +1,14 @@
 cmake_minimum_required(VERSION 3.24)
 
 project(Hesh
-    VERSION 0.2.0
+    VERSION 0.2.1
     DESCRIPTION "A lightweight device development and emulation environment"
     LANGUAGES CXX
 )
+
+option(HESH_ENABLE_ANDROID
+       "Enable the resource-intensive Android emulator runtime"
+       OFF)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -22,6 +26,7 @@ qt_policy(SET QTP0004 NEW)
 qt_add_library(hesh_core STATIC
     src/app/Application.cpp
     src/app/Application.hpp
+    src/app/FeatureFlags.hpp
     src/app/Settings.cpp
     src/app/Settings.hpp
     src/devices/Device.cpp
@@ -30,6 +35,10 @@ qt_add_library(hesh_core STATIC
     src/devices/DeviceManager.hpp
     src/devices/DeviceProfile.cpp
     src/devices/DeviceProfile.hpp
+    src/android/AndroidDevice.cpp
+    src/android/AndroidDevice.hpp
+    src/android/AndroidRuntime.cpp
+    src/android/AndroidRuntime.hpp
     src/web/WebDevice.cpp
     src/web/WebDevice.hpp
 )
@@ -38,6 +47,12 @@ target_include_directories(hesh_core
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
+
+if(HESH_ENABLE_ANDROID)
+    target_compile_definitions(hesh_core PUBLIC HESH_ENABLE_ANDROID=1)
+else()
+    target_compile_definitions(hesh_core PUBLIC HESH_ENABLE_ANDROID=0)
+endif()
 
 target_link_libraries(hesh_core
     PUBLIC
@@ -59,6 +74,8 @@ target_link_libraries(hesh
         Qt6::WebEngineQuick
 )
 
+target_compile_definitions(hesh PRIVATE HESH_VERSION="${PROJECT_VERSION}")
+
 set_source_files_properties(qml/theme/Theme.qml PROPERTIES
     QT_QML_SINGLETON_TYPE TRUE
 )
@@ -69,6 +86,7 @@ qt_add_qml_module(hesh
     QML_FILES
         qml/Main.qml
         qml/components/AppButton.qml
+        qml/components/AndroidFrame.qml
         qml/components/DeviceFrame.qml
         qml/components/DeviceContextMenu.qml
         qml/components/DeviceListItem.qml
