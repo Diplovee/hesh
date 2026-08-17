@@ -87,24 +87,20 @@ Item {
                 }
             }
 
-            IconButton {
-                id: menuButton
-                Layout.alignment: Qt.AlignVCenter
-                Layout.preferredWidth: 28
-                Layout.preferredHeight: 28
-                iconText: "⋯"
-                tooltip: "Device menu"
-                visible: root.selected || rowMouseArea.containsMouse
-                onClicked: deviceMenu.openFor(menuButton)
-            }
         }
 
         MouseArea {
             id: rowMouseArea
             anchors.fill: parent
             hoverEnabled: true
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
             cursorShape: Qt.PointingHandCursor
-            onClicked: root.activated()
+            onClicked: function(mouse) {
+                if (mouse.button === Qt.RightButton)
+                    deviceMenu.openAt(rowMouseArea, mouse.x, mouse.y)
+                else
+                    root.activated()
+            }
         }
     }
 
@@ -115,5 +111,6 @@ Item {
         deviceName: root.deviceName
         deviceType: root.deviceType
         deviceStatus: root.deviceStatus
+        devicePresentationState: root.devicePresentationState
     }
 }

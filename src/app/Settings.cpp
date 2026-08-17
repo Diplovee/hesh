@@ -67,4 +67,43 @@ void Settings::setSelectedDeviceId(const QString& id)
     m_settings->sync();
 }
 
+QHash<QString, QString> Settings::loadShortcuts() const
+{
+    const auto json = m_settings->value(QStringLiteral("shortcuts")).toByteArray();
+    if (json.isEmpty()) {
+        return {};
+    }
+
+    const auto document = QJsonDocument::fromJson(json);
+    if (!document.isObject()) {
+        return {};
+    }
+
+    const auto object = document.object();
+    QHash<QString, QString> shortcuts;
+    for (auto it = object.constBegin(); it != object.constEnd(); ++it) {
+        if (it.value().isString()) {
+            shortcuts.insert(it.key(), it.value().toString());
+        }
+    }
+    return shortcuts;
+}
+
+void Settings::saveShortcuts(const QHash<QString, QString>& shortcuts)
+{
+    if (shortcuts.isEmpty()) {
+        m_settings->remove(QStringLiteral("shortcuts"));
+        m_settings->sync();
+        return;
+    }
+
+    QJsonObject object;
+    for (auto it = shortcuts.constBegin(); it != shortcuts.constEnd(); ++it) {
+        object.insert(it.key(), it.value());
+    }
+    m_settings->setValue(QStringLiteral("shortcuts"),
+                         QJsonDocument(object).toJson(QJsonDocument::Compact));
+    m_settings->sync();
+}
+
 } // namespace Hesh

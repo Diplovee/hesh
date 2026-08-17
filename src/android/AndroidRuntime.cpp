@@ -241,6 +241,12 @@ bool AndroidRuntime::start()
     return true;
 }
 
+bool AndroidRuntime::restart()
+{
+    stop();
+    return start();
+}
+
 void AndroidRuntime::stop()
 {
     m_stopping = true;
@@ -298,6 +304,22 @@ bool AndroidRuntime::openDisplay()
     }
     setDisplayAvailable(true);
     return true;
+}
+
+bool AndroidRuntime::refreshDisplay()
+{
+    if (!m_booted) {
+        return false;
+    }
+    if (m_displayProcess->state() != QProcess::NotRunning) {
+        m_displayProcess->terminate();
+        if (!m_displayProcess->waitForFinished(1500)) {
+            m_displayProcess->kill();
+            m_displayProcess->waitForFinished(1000);
+        }
+        setDisplayAvailable(false);
+    }
+    return openDisplay();
 }
 
 bool AndroidRuntime::sendKeyEvent(int keyCode)

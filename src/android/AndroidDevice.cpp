@@ -83,6 +83,22 @@ bool AndroidDevice::openDisplay()
     return m_runtime->openDisplay();
 }
 
+bool AndroidDevice::reload()
+{
+    if (featureLocked()) {
+        return false;
+    }
+    return m_runtime->refreshDisplay();
+}
+
+bool AndroidDevice::hardReload()
+{
+    if (featureLocked()) {
+        return false;
+    }
+    return m_runtime->restart();
+}
+
 bool AndroidDevice::sendHome()
 {
     if (featureLocked()) {

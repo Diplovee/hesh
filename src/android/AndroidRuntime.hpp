@@ -34,8 +34,10 @@ public:
     bool scrcpyAvailable() const;
 
     Q_INVOKABLE bool start();
+    Q_INVOKABLE bool restart();
     Q_INVOKABLE void stop();
     Q_INVOKABLE bool openDisplay();
+    Q_INVOKABLE bool refreshDisplay();
     Q_INVOKABLE bool sendKeyEvent(int keyCode);
     Q_INVOKABLE bool rotate();
     Q_INVOKABLE bool installApk(const QString& apkPath);

@@ -10,9 +10,9 @@ Item {
     property var manager
     property real availableWidth: 620
     property real availableHeight: 560
-    readonly property bool isLoading: root.device && root.device.status === "Starting"
-    readonly property bool featureLocked: root.manager && !root.manager.androidFeatureEnabled
-    readonly property bool pageLoaded: root.device && root.device.booted
+    readonly property bool isLoading: !!root.device && root.device.status === "Starting"
+    readonly property bool featureLocked: !!root.manager && !root.manager.androidFeatureEnabled
+    readonly property bool pageLoaded: !!root.device && !!root.device.booted
     readonly property bool canGoBack: false
     readonly property bool canGoForward: false
     readonly property string presentationMode: "Android"
@@ -25,11 +25,19 @@ Item {
     function useFit() {}
     function goBack() {}
     function goForward() {}
+    function reload() {
+        if (root.device && !root.featureLocked)
+            root.device.reload()
+    }
+    function hardReload() {
+        if (root.device && !root.featureLocked)
+            root.device.hardReload()
+    }
     function reloadOrStop() {
         if (!root.device || !root.manager || root.featureLocked)
             return
         if (root.device.status === "Running")
-            root.manager.stopDevice(root.device.id)
+            root.reload()
         else
             root.manager.startDevice(root.device.id)
     }
@@ -87,7 +95,7 @@ Item {
 
             Text {
                 Layout.fillWidth: true
-                visible: root.device && root.device.errorMessage.length > 0
+                visible: !!root.device && root.device.errorMessage.length > 0
                 text: root.device ? root.device.errorMessage : ""
                 horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.WordWrap
@@ -97,7 +105,7 @@ Item {
 
             Text {
                 Layout.fillWidth: true
-                visible: root.featureLocked || (root.device && root.device.status !== "Error")
+                visible: root.featureLocked || (!!root.device && root.device.status !== "Error")
                 text: root.featureLocked
                       ? "This resource-intensive feature is locked in this build. Re-enable HESH_ENABLE_ANDROID only on a machine with enough memory."
                       : (root.device && root.device.runtime.scrcpyAvailable
@@ -118,7 +126,7 @@ Item {
                 AppButton {
                     text: "Open Display"
                     compact: true
-                    enabled: root.device && root.device.booted && !root.featureLocked
+                    enabled: !!root.device && !!root.device.booted && !root.featureLocked
                     onClicked: if (root.device) root.device.openDisplay()
                 }
 
@@ -126,7 +134,7 @@ Item {
                     text: root.device && root.device.status === "Running" ? "Stop" : "Start"
                     secondary: true
                     compact: true
-                    enabled: root.device !== null && !root.featureLocked
+                    enabled: !!root.device && !root.featureLocked
                     onClicked: {
                         if (!root.device)
                             return
@@ -146,7 +154,7 @@ Item {
                     text: "Back"
                     secondary: true
                     compact: true
-                    enabled: root.device && root.device.booted && !root.featureLocked
+                    enabled: !!root.device && !!root.device.booted && !root.featureLocked
                     onClicked: if (root.device) root.device.sendBack()
                 }
 
@@ -154,7 +162,7 @@ Item {
                     text: "Home"
                     secondary: true
                     compact: true
-                    enabled: root.device && root.device.booted && !root.featureLocked
+                    enabled: !!root.device && !!root.device.booted && !root.featureLocked
                     onClicked: if (root.device) root.device.sendHome()
                 }
 
@@ -162,7 +170,7 @@ Item {
                     text: "Recents"
                     secondary: true
                     compact: true
-                    enabled: root.device && root.device.booted && !root.featureLocked
+                    enabled: !!root.device && !!root.device.booted && !root.featureLocked
                     onClicked: if (root.device) root.device.sendRecents()
                 }
 
@@ -170,7 +178,7 @@ Item {
                     text: "Rotate"
                     secondary: true
                     compact: true
-                    enabled: root.device && root.device.booted && !root.featureLocked
+                    enabled: !!root.device && !!root.device.booted && !root.featureLocked
                     onClicked: if (root.device) root.device.rotateDevice()
                 }
             }
@@ -202,7 +210,7 @@ Item {
                     text: "Install APK"
                     secondary: true
                     compact: true
-                    enabled: root.device && root.device.booted && !root.featureLocked
+                    enabled: !!root.device && !!root.device.booted && !root.featureLocked
                              && apkPathField.text.length > 0
                     onClicked: if (root.device) root.device.installApk(apkPathField.text)
                 }

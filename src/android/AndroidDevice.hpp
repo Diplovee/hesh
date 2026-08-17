@@ -35,6 +35,8 @@ public:
     AndroidRuntime* runtime() const;
 
     Q_INVOKABLE bool openDisplay();
+    Q_INVOKABLE bool reload();
+    Q_INVOKABLE bool hardReload();
     Q_INVOKABLE bool sendHome();
     Q_INVOKABLE bool sendBack();
     Q_INVOKABLE bool sendRecents();

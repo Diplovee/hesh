@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QList>
+#include <QHash>
 #include <QString>
 
 #include <memory>
@@ -27,6 +28,9 @@ public:
 
     QString selectedDeviceId() const;
     void setSelectedDeviceId(const QString& id);
+
+    QHash<QString, QString> loadShortcuts() const;
+    void saveShortcuts(const QHash<QString, QString>& shortcuts);
 
 private:
     std::unique_ptr<QSettings> m_settings;

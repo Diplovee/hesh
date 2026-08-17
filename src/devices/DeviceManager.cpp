@@ -210,6 +210,28 @@ void DeviceManager::selectDevice(const QString& id)
     setSelectedDevice(findById(id));
 }
 
+void DeviceManager::selectNextDevice()
+{
+    if (m_model.rowCount() == 0) {
+        return;
+    }
+    const auto current = m_model.indexOf(m_selectedDevice);
+    const auto next = current < 0 ? 0 : (current + 1) % m_model.rowCount();
+    setSelectedDevice(m_model.at(next));
+}
+
+void DeviceManager::selectPreviousDevice()
+{
+    if (m_model.rowCount() == 0) {
+        return;
+    }
+    const auto current = m_model.indexOf(m_selectedDevice);
+    const auto previous = current < 0
+        ? 0
+        : (current + m_model.rowCount() - 1) % m_model.rowCount();
+    setSelectedDevice(m_model.at(previous));
+}
+
 void DeviceManager::startDevice(const QString& id)
 {
     if (auto* device = findById(id)) {
@@ -228,6 +250,31 @@ void DeviceManager::stopDevice(const QString& id)
         device->stop();
         persist();
     }
+}
+
+bool DeviceManager::reloadDevice(const QString& id, bool hardReload)
+{
+    auto* device = findById(id);
+    if (!device) {
+        return false;
+    }
+    if (auto* webDevice = qobject_cast<WebDevice*>(device)) {
+        if (hardReload) {
+            webDevice->hardReload();
+        } else {
+            webDevice->reload();
+        }
+        return true;
+    }
+    if (auto* androidDevice = qobject_cast<AndroidDevice*>(device)) {
+        return hardReload ? androidDevice->hardReload() : androidDevice->reload();
+    }
+    return false;
+}
+
+bool DeviceManager::reloadSelectedDevice(bool hardReload)
+{
+    return m_selectedDevice && reloadDevice(m_selectedDevice->id(), hardReload);
 }
 
 bool DeviceManager::openStandalone(const QString& id)

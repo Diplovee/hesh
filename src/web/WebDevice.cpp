@@ -184,6 +184,16 @@ void WebDevice::setNavigationState(bool back, bool forward)
     emit navigationStateChanged();
 }
 
+void WebDevice::reload()
+{
+    emit reloadRequested(false);
+}
+
+void WebDevice::hardReload()
+{
+    emit reloadRequested(true);
+}
+
 QString WebDevice::profileStoragePath() const
 {
     return QDir(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation))

@@ -10,7 +10,7 @@ Item {
 
     property var device
     property var manager
-    readonly property bool isAndroid: root.device && root.device.type === "android"
+    readonly property bool isAndroid: !!root.device && root.device.type === "android"
     property string selectedFit: "Fit"
     readonly property var fitChoices: ["Fit", "25%", "50%", "75%", "100%", "125%"]
     readonly property var deviceFrame: frameLoader.item
@@ -30,6 +30,58 @@ Item {
             root.manager.returnToEmbedded(root.device.id)
     }
 
+    function reloadDevice(hard) {
+        if (!root.device)
+            return
+        if (root.isAndroid) {
+            if (hard)
+                root.device.hardReload()
+            else
+                root.device.reload()
+        } else {
+            // Calling the device API also reaches a detached WebEngineView,
+            // while preserving the selected-device shortcut target.
+            if (hard)
+                root.device.hardReload()
+            else
+                root.device.reload()
+        }
+    }
+
+    function toggleStandalone() {
+        if (!root.manager || !root.device || root.isAndroid)
+            return
+        if (root.device.presentationState === "Standalone")
+            root.returnToEmbedded()
+        else
+            root.manager.openStandalone(root.device.id)
+    }
+
+    function toggleDevTools() {
+        if (frameLoader.item && !root.isAndroid)
+            frameLoader.item.devToolsVisible = !frameLoader.item.devToolsVisible
+    }
+
+    function focusUrl() {
+        if (!root.isAndroid) {
+            urlField.forceActiveFocus()
+            urlField.selectAll()
+        }
+    }
+
+    function setShortcutScale(choice) {
+        root.applyFit(choice)
+    }
+
+    function rotateDevice() {
+        if (!root.device)
+            return
+        if (root.isAndroid)
+            root.device.rotateDevice()
+        else
+            root.device.orientation = root.device.orientation === "Landscape" ? "Portrait" : "Landscape"
+    }
+
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
@@ -42,7 +94,6 @@ Item {
             spacing: 12
 
             ColumnLayout {
-                Layout.fillWidth: true
                 spacing: 3
 
                 Text {
@@ -63,8 +114,14 @@ Item {
                 }
             }
 
+            Item {
+                Layout.fillWidth: true
+                Layout.minimumWidth: 0
+            }
+
             Text {
-                visible: !root.isAndroid && root.device && root.device.presentationState === "Standalone"
+                visible: !root.isAndroid && !!root.device
+                         && root.device.presentationState === "Standalone"
                 text: "OPEN IN WINDOW"
                 color: Theme.accent
                 font.pixelSize: 9
@@ -75,8 +132,7 @@ Item {
             IconButton {
                 id: menuButton
                 iconText: "⋯"
-                tooltip: "Device actions"
-                enabled: root.device !== null
+                enabled: !!root.device
                 onClicked: deviceMenu.openFor(menuButton)
             }
         }
@@ -88,6 +144,8 @@ Item {
             deviceName: root.device ? root.device.name : ""
             deviceType: root.device ? root.device.type : "web"
             deviceStatus: root.device ? root.device.status : "Stopped"
+            devicePresentationState: root.device && root.device.type === "web"
+                                     ? root.device.presentationState : "Embedded"
         }
 
         Rectangle {
@@ -107,7 +165,7 @@ Item {
                 iconText: "‹"
                 tooltip: "Back"
                 visible: !root.isAndroid
-                enabled: frameLoader.item && frameLoader.item.canGoBack
+                enabled: !!frameLoader.item && !!frameLoader.item.canGoBack
                 onClicked: frameLoader.item.goBack()
             }
 
@@ -115,7 +173,7 @@ Item {
                 iconText: "›"
                 tooltip: "Forward"
                 visible: !root.isAndroid
-                enabled: frameLoader.item && frameLoader.item.canGoForward
+                enabled: !!frameLoader.item && !!frameLoader.item.canGoForward
                 onClicked: frameLoader.item.goForward()
             }
 
@@ -162,8 +220,9 @@ Item {
                 text: !root.isAndroid && root.device && root.device.presentationState === "Standalone"
                       ? "Return to Hesh" : "Open in Window"
                 compact: true
-                secondary: !root.isAndroid && root.device && root.device.presentationState === "Standalone"
-                enabled: root.device !== null
+                secondary: !root.isAndroid && !!root.device
+                           && root.device.presentationState === "Standalone"
+                enabled: !!root.device
                 onClicked: {
                     if (!root.manager || !root.device)
                         return
@@ -193,8 +252,8 @@ Item {
                 visible: root.isAndroid
                 text: "Open Android Display"
                 compact: true
-                enabled: root.device && root.device.booted
-                         && root.manager && root.manager.androidFeatureEnabled
+                enabled: !!root.device && !!root.device.booted
+                         && !!root.manager && !!root.manager.androidFeatureEnabled
                 onClicked: if (root.device) root.device.openDisplay()
             }
         }
@@ -241,7 +300,8 @@ Item {
                     anchors.centerIn: parent
                     width: Math.min(parent.width - 40, 360)
                     spacing: 12
-                    visible: !root.isAndroid && root.device && root.device.presentationState === "Standalone"
+                    visible: !root.isAndroid && !!root.device
+                             && root.device.presentationState === "Standalone"
 
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
@@ -356,7 +416,7 @@ Item {
                     text: root.device && root.device.orientation === "Landscape" ? "Portrait" : "Landscape"
                     compact: true
                     secondary: true
-                    enabled: root.device !== null
+                    enabled: !!root.device
                     onClicked: if (root.device) root.device.orientation = root.device.orientation === "Landscape" ? "Portrait" : "Landscape"
                 }
 

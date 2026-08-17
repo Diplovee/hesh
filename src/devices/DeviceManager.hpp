@@ -73,8 +73,12 @@ public:
                                                    const QString& adbSerial);
     Q_INVOKABLE void removeDevice(const QString& id);
     Q_INVOKABLE void selectDevice(const QString& id);
+    Q_INVOKABLE void selectNextDevice();
+    Q_INVOKABLE void selectPreviousDevice();
     Q_INVOKABLE void startDevice(const QString& id);
     Q_INVOKABLE void stopDevice(const QString& id);
+    Q_INVOKABLE bool reloadDevice(const QString& id, bool hardReload = false);
+    Q_INVOKABLE bool reloadSelectedDevice(bool hardReload = false);
     Q_INVOKABLE bool openStandalone(const QString& id);
     Q_INVOKABLE void returnToEmbedded(const QString& id);
     Q_INVOKABLE bool isStandalone(const QString& id) const;

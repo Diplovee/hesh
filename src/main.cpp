@@ -1,4 +1,4 @@
-#include <QGuiApplication>
+#include <QApplication>
 #include <QDebug>
 #include <QIcon>
 #include <QQmlApplicationEngine>
@@ -20,7 +20,7 @@ int main(int argc, char* argv[])
 {
     QtWebEngineQuick::initialize();
 
-    QGuiApplication app(argc, argv);
+    QApplication app(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("Hesh"));
     QCoreApplication::setApplicationVersion(QStringLiteral(HESH_VERSION));
     QCoreApplication::setOrganizationName(QStringLiteral("Hesh"));
@@ -39,6 +39,13 @@ int main(int argc, char* argv[])
     Hesh::Application hesh;
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty(QStringLiteral("deviceManager"), hesh.deviceManager());
+    engine.rootContext()->setContextProperty(QStringLiteral("heshApplication"), &hesh);
+    engine.rootContext()->setContextProperty(QStringLiteral("shortcutManager"), hesh.shortcutManager());
+
+    QObject::connect(&hesh,
+                     &Hesh::Application::quitRequested,
+                     &app,
+                     &QCoreApplication::quit);
 
     QObject::connect(&engine,
                      &QQmlApplicationEngine::warnings,

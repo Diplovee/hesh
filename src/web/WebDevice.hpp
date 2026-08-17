@@ -62,6 +62,8 @@ public:
     Q_INVOKABLE void setRuntimeLoaded();
     Q_INVOKABLE void setRuntimeError(const QString& message);
     Q_INVOKABLE void setNavigationState(bool canGoBack, bool canGoForward);
+    Q_INVOKABLE void reload();
+    Q_INVOKABLE void hardReload();
 
     QQuickWebEngineProfile* browserProfile() const;
     QString profileStoragePath() const;
@@ -79,6 +81,7 @@ signals:
     void presentationStateChanged();
     void runtimeStateChanged();
     void navigationStateChanged();
+    void reloadRequested(bool bypassCache);
 
 private:
     void initializeBrowserProfile() const;

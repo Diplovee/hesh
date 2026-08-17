@@ -71,6 +71,14 @@ Item {
             webView.goForward()
     }
 
+    function reload() {
+        webView.reload()
+    }
+
+    function hardReload() {
+        webView.reloadAndBypassCache()
+    }
+
     function reloadOrStop() {
         if (webView.loading)
             webView.stop()
@@ -127,11 +135,18 @@ Item {
             WebEngineView {
                 id: webView
                 anchors.fill: parent
-                url: root.device && root.device.status === "Running" ? root.device.url : "about:blank"
+                // Keep the configured URL mounted while the device lifecycle
+                // changes. Switching to about:blank for a transient status
+                // update can feed that internal URL back into WebDevice and
+                // permanently replace the user's app URL.
+                url: root.device ? root.device.url : "about:blank"
                 profile: root.device ? root.device.browserProfile : null
                 backgroundColor: "#0d1014"
                 settings.fullScreenSupportEnabled: false
                 settings.javascriptEnabled: true
+                // Keep web app state (localStorage/IndexedDB) enabled for the
+                // device-specific persistent QQuickWebEngineProfile.
+                settings.localStorageEnabled: true
                 settings.localContentCanAccessRemoteUrls: true
                 userScripts.collection: [{
                     name: "hesh-responsive-viewport",
@@ -172,7 +187,8 @@ Item {
                 }
 
                 onUrlChanged: {
-                    if (root.device && url.toString() !== root.device.url)
+                    if (root.device && url.toString() !== "about:blank"
+                        && url.toString() !== root.device.url)
                         root.device.url = url.toString()
                 }
 
@@ -189,13 +205,24 @@ Item {
                 onRenderProcessTerminated: function(terminationStatus, exitCode) {
                     if (root.device)
                         root.device.setRuntimeError("The WebEngine render process stopped (" + exitCode + ").")
-                }
             }
+        }
 
-            Rectangle {
+        Connections {
+            target: root.device
+
+            function onReloadRequested(bypassCache) {
+                if (bypassCache)
+                    root.hardReload()
+                else
+                    root.reload()
+            }
+        }
+
+        Rectangle {
                 anchors.fill: parent
                 z: 2
-                visible: root.device && root.device.runtimeState === "Loading"
+                visible: !!root.device && root.device.runtimeState === "Loading"
                 color: "#0d1014"
 
                 Column {
@@ -223,7 +250,7 @@ Item {
             Rectangle {
                 anchors.fill: parent
                 z: 3
-                visible: root.device && root.device.runtimeState === "Error"
+                visible: !!root.device && root.device.runtimeState === "Error"
                 color: "#0d1014"
 
                 Column {

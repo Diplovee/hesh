@@ -81,6 +81,91 @@ Window {
         Qt.callLater(function() { root.updateNativeGeometry() })
     }
 
+    function dispatchShortcut(actionId) {
+        switch (actionId) {
+        case "window.hide":
+            heshApplication.hideToTray()
+            root.hide()
+            break
+        case "window.show":
+            heshApplication.requestShow()
+            break
+        case "window.minimize":
+            root.showMinimized()
+            break
+        case "window.maximize":
+            if (root.visibility === Window.Maximized)
+                root.showNormal()
+            else
+                root.showMaximized()
+            break
+        case "window.close":
+            root.close()
+            break
+        case "app.quit":
+            Qt.quit()
+            break
+        case "device.new":
+            heshApplication.requestNewDevice()
+            break
+        case "device.settings":
+            heshApplication.requestShortcutSettings()
+            break
+        case "device.start":
+            if (root.manager && root.device)
+                root.manager.startDevice(root.device.id)
+            break
+        case "device.stop":
+            if (root.manager && root.device)
+                root.manager.stopDevice(root.device.id)
+            break
+        case "device.reload":
+            if (root.device)
+                root.device.reload()
+            break
+        case "device.hardReload":
+            if (root.device)
+                root.device.hardReload()
+            break
+        case "device.rotate":
+            root.rotateDevice()
+            break
+        case "device.openStandalone":
+            root.returnToHesh()
+            break
+        case "web.back":
+            deviceFrame.goBack()
+            break
+        case "web.forward":
+            deviceFrame.goForward()
+            break
+        case "web.focusUrl":
+            break
+        case "web.devTools":
+            root.devToolsVisible = !root.devToolsVisible
+            Qt.callLater(function() { root.updateNativeGeometry() })
+            break
+        case "view.fit":
+            root.fitToWorkArea()
+            break
+        case "view.scale25":
+            root.setPresentationScale(0.25)
+            break
+        case "view.scale50":
+            root.setPresentationScale(0.50)
+            break
+        case "view.scale75":
+            root.setPresentationScale(0.75)
+            break
+        case "view.scale100":
+            root.setPresentationScale(1.0)
+            break
+        case "view.scale125":
+            root.setPresentationScale(1.25)
+            break
+        }
+    }
+
     onClosing: {
         // Closing the frameless client returns the same device to Hesh. The
         // manager retains the persistent profile and canonical runtime state.
@@ -96,6 +181,34 @@ Window {
         devToolsVisible: root.devToolsVisible
         availableWidth: root.workAreaWidth
         availableHeight: root.workAreaHeight
+    }
+
+    Connections {
+        target: shortcutManager
+
+        function onActionTriggered(actionId, targetDeviceId, origin) {
+            if (origin === root.device.id)
+                root.dispatchShortcut(actionId)
+        }
+    }
+
+    Repeater {
+        model: shortcutManager
+
+        delegate: Item {
+            id: shortcutDelegate
+            required property string actionId
+            required property string sequence
+
+            Shortcut {
+                sequence: shortcutDelegate.sequence
+                enabled: root.visible
+                context: Qt.WindowShortcut
+                onActivated: shortcutManager.trigger(actionId,
+                                                     root.device ? root.device.id : "",
+                                                     root.device ? root.device.id : "")
+            }
+        }
     }
 
     // Only the right button is handled here. Left-clicks continue directly to

@@ -102,7 +102,7 @@ logical viewport scaling, presentation hosts, and the Android runtime boundary.
 See [docs/ANDROID_SETUP.md](docs/ANDROID_SETUP.md) for the Omarchy/Arch SDK,
 ADB, emulator, AVD, and scrcpy setup.
 
-The Android runtime is locked by default in version 0.2.1 because an emulator
+The Android runtime is locked by default in version 0.2.2 because an emulator
 can exceed available system memory on lighter machines. The implementation is
 retained and can be explicitly enabled with `-DHESH_ENABLE_ANDROID=ON` when
 the host has enough resources.

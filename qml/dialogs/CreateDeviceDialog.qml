@@ -9,7 +9,8 @@ Popup {
     property var manager
     property int step: 0
     property string selectedType: ""
-    readonly property bool androidFeatureEnabled: root.manager && root.manager.androidFeatureEnabled
+    readonly property bool androidFeatureEnabled: !!root.manager
+                                                  && !!root.manager.androidFeatureEnabled
 
     modal: true
     focus: true

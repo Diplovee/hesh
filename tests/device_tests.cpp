@@ -1,8 +1,10 @@
 #include <QtTest>
 
+#include <QSignalSpy>
 #include <QTemporaryDir>
 
 #include "app/Settings.hpp"
+#include "app/ShortcutManager.hpp"
 #include "android/AndroidDevice.hpp"
 #include "devices/DeviceManager.hpp"
 #include "devices/DeviceProfile.hpp"
@@ -30,6 +32,10 @@ private slots:
     void androidDeviceConfiguration();
     void androidFeatureLock();
     void androidRecordRoundTrip();
+    void shortcutDefaults();
+    void shortcutPersistence();
+    void shortcutConflictsAndReset();
+    void webReloadRequests();
 };
 
 void DeviceTests::createWebDevice()
@@ -332,6 +338,85 @@ void DeviceTests::androidRecordRoundTrip()
     QCOMPARE(parsed->profileName, original.profileName);
     QCOMPARE(parsed->avdName, original.avdName);
     QCOMPARE(parsed->adbSerial, original.adbSerial);
+}
+
+void DeviceTests::shortcutDefaults()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    Settings settings(QStringLiteral("HeshTests"), QStringLiteral("ShortcutDefaults"),
+                      directory.filePath(QStringLiteral("settings.ini")));
+    ShortcutManager shortcuts(&settings);
+
+    QCOMPARE(shortcuts.shortcutFor(QStringLiteral("device.reload")), QStringLiteral("Ctrl+R"));
+    QCOMPARE(shortcuts.shortcutFor(QStringLiteral("device.hardReload")),
+             QStringLiteral("Ctrl+Shift+R"));
+    QCOMPARE(shortcuts.shortcutFor(QStringLiteral("window.hide")), QStringLiteral("Ctrl+Shift+H"));
+    QCOMPARE(shortcuts.shortcutFor(QStringLiteral("window.show")), QString {});
+    QVERIFY(shortcuts.hasAction(QStringLiteral("web.devTools")));
+    QVERIFY(shortcuts.rowCount() >= 20);
+}
+
+void DeviceTests::shortcutPersistence()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto settingsPath = directory.filePath(QStringLiteral("settings.ini"));
+
+    {
+        Settings settings(QStringLiteral("HeshTests"), QStringLiteral("ShortcutPersistence"),
+                          settingsPath);
+        ShortcutManager shortcuts(&settings);
+        QVERIFY(shortcuts.setShortcut(QStringLiteral("device.reload"), QStringLiteral("Alt+R")));
+        QCOMPARE(shortcuts.shortcutFor(QStringLiteral("device.reload")), QStringLiteral("Alt+R"));
+    }
+
+    Settings reloadedSettings(QStringLiteral("HeshTests"), QStringLiteral("ShortcutPersistence"),
+                               settingsPath);
+    ShortcutManager reloaded(&reloadedSettings);
+    QCOMPARE(reloaded.shortcutFor(QStringLiteral("device.reload")), QStringLiteral("Alt+R"));
+    QCOMPARE(reloaded.shortcutFor(QStringLiteral("device.hardReload")),
+             QStringLiteral("Ctrl+Shift+R"));
+}
+
+void DeviceTests::shortcutConflictsAndReset()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    Settings settings(QStringLiteral("HeshTests"), QStringLiteral("ShortcutConflicts"),
+                      directory.filePath(QStringLiteral("settings.ini")));
+    ShortcutManager shortcuts(&settings);
+    QVERIFY(!shortcuts.setShortcut(QStringLiteral("device.reload"), QStringLiteral("Ctrl+Shift+R")));
+    QVERIFY(!shortcuts.errorMessage().isEmpty());
+    QCOMPARE(shortcuts.shortcutFor(QStringLiteral("device.reload")), QStringLiteral("Ctrl+R"));
+
+    QVERIFY(shortcuts.setShortcut(QStringLiteral("device.reload"), QStringLiteral("Alt+R")));
+    QVERIFY(shortcuts.resetShortcut(QStringLiteral("device.reload")));
+    QCOMPARE(shortcuts.shortcutFor(QStringLiteral("device.reload")), QStringLiteral("Ctrl+R"));
+
+    QVERIFY(shortcuts.setShortcut(QStringLiteral("device.reload"), QStringLiteral("Alt+R")));
+    shortcuts.resetAllShortcuts();
+    QCOMPARE(shortcuts.shortcutFor(QStringLiteral("device.reload")), QStringLiteral("Ctrl+R"));
+    QVERIFY(shortcuts.errorMessage().isEmpty());
+}
+
+void DeviceTests::webReloadRequests()
+{
+    WebDevice device(QStringLiteral("reload-test"),
+                     QStringLiteral("Reload test"),
+                     DeviceProfile::fromName(QStringLiteral("Pixel 7")),
+                     QStringLiteral("http://localhost:3000"));
+    QSignalSpy spy(&device, &WebDevice::reloadRequested);
+
+    device.reload();
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(spy.at(0).at(0).toBool(), false);
+
+    device.hardReload();
+    QCOMPARE(spy.count(), 2);
+    QCOMPARE(spy.at(1).at(0).toBool(), true);
 }
 
 QTEST_MAIN(DeviceTests)
