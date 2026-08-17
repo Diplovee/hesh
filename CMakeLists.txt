@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 
 project(Hesh
-    VERSION 0.2.2
+    VERSION 0.2.3
     DESCRIPTION "A lightweight device development and emulation environment"
     LANGUAGES CXX
 )

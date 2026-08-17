@@ -15,6 +15,10 @@ Item {
     property bool frameChromeVisible: true
     property string fitMode: "Fit"
     property real manualScale: 1.0
+    // The device frame is rendered at its presentation size. This separate
+    // factor keeps the selected logical CSS viewport while avoiding a
+    // fractional QML transform over the WebEngine texture.
+    property real userZoomFactor: 1.0
     property bool devToolsVisible: false
     property int devToolsWidth: 360
 
@@ -35,6 +39,9 @@ Item {
                                                 Math.max(0.1, root.fitAvailableHeight / root.frameHeight))
                                      : 1.0
     readonly property real presentationScale: root.fitMode === "Fit" ? root.fitScale : root.manualScale
+    readonly property real webZoomFactor: Math.max(0.25,
+                                                   Math.min(3.0,
+                                                            root.presentationScale * root.userZoomFactor))
     readonly property int presentationPercent: Math.round(root.presentationScale * 100)
     readonly property string presentationMode: root.fitMode === "Fit" ? "Fit" : "Scale"
     readonly property bool isLoading: root.device ? root.device.loading : false
@@ -91,21 +98,32 @@ Item {
         webView.reload()
     }
 
+    function syncWebZoom() {
+        if (Math.abs(webView.zoomFactor - root.webZoomFactor) > 0.001)
+            webView.zoomFactor = root.webZoomFactor
+    }
+
     function zoomIn() {
-        webView.zoomFactor = Math.min(3.0, webView.zoomFactor + 0.1)
+        root.userZoomFactor = Math.min(3.0 / Math.max(root.presentationScale, 0.1),
+                                       root.userZoomFactor + 0.1)
+        root.syncWebZoom()
     }
 
     function zoomOut() {
-        webView.zoomFactor = Math.max(0.25, webView.zoomFactor - 0.1)
+        root.userZoomFactor = Math.max(0.25 / Math.max(root.presentationScale, 0.1),
+                                       root.userZoomFactor - 0.1)
+        root.syncWebZoom()
     }
+
+    onPresentationScaleChanged: root.syncWebZoom()
+
+    Component.onCompleted: root.syncWebZoom()
 
     Rectangle {
         id: frame
-        width: root.frameWidth
-        height: root.frameHeight
-        scale: root.presentationScale
-        transformOrigin: Item.TopLeft
-        radius: root.frameChromeVisible ? root.screenRadius : 0
+        width: root.frameWidth * root.presentationScale
+        height: root.frameHeight * root.presentationScale
+        radius: root.frameChromeVisible ? root.screenRadius * root.presentationScale : 0
         color: root.frameChromeVisible ? Theme.panelRaised : "#0d1014"
         border.width: root.frameChromeVisible ? 1 : 0
         border.color: root.frameChromeVisible ? Theme.borderStrong : "transparent"
@@ -113,28 +131,32 @@ Item {
 
         Text {
             anchors.top: parent.top
-            anchors.topMargin: 1
+            anchors.topMargin: root.presentationScale
             anchors.horizontalCenter: parent.horizontalCenter
-            height: root.bezel - 2
+            height: Math.max(1, (root.bezel - 2) * root.presentationScale)
             verticalAlignment: Text.AlignVCenter
             visible: root.frameChromeVisible
             text: root.device ? root.device.profileName : ""
             color: Theme.textFaint
-            font.pixelSize: 9
+            font.pixelSize: Math.max(1, 9 * root.presentationScale)
             font.weight: Font.Medium
         }
 
         Rectangle {
             id: contentSurface
             anchors.fill: parent
-            anchors.margins: root.chromeInset
-            radius: root.frameChromeVisible ? root.screenRadius : 0
+            anchors.margins: root.chromeInset * root.presentationScale
+            radius: root.frameChromeVisible ? root.screenRadius * root.presentationScale : 0
             color: "#0d1014"
             clip: true
 
             WebEngineView {
                 id: webView
                 anchors.fill: parent
+                // Keep the WebEngine surface at the size presented on screen.
+                // Its zoom factor compensates for that size so the page still
+                // sees the selected logical device viewport.
+                zoomFactor: root.webZoomFactor
                 // Keep the configured URL mounted while the device lifecycle
                 // changes. Switching to about:blank for a transient status
                 // update can feed that internal URL back into WebDevice and
@@ -233,16 +255,16 @@ Item {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: "LOADING"
                         color: Theme.accent
-                        font.pixelSize: 10
+                        font.pixelSize: Math.max(1, 10 * root.presentationScale)
                         font.weight: Font.DemiBold
-                        font.letterSpacing: 1.7
+                        font.letterSpacing: 1.7 * root.presentationScale
                     }
 
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: root.device ? root.device.url : ""
                         color: Theme.textMuted
-                        font.pixelSize: 12
+                        font.pixelSize: Math.max(1, 12 * root.presentationScale)
                     }
                 }
             }
@@ -262,9 +284,9 @@ Item {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: "COULDN'T REACH"
                         color: Theme.error
-                        font.pixelSize: 10
+                        font.pixelSize: Math.max(1, 10 * root.presentationScale)
                         font.weight: Font.DemiBold
-                        font.letterSpacing: 1.4
+                        font.letterSpacing: 1.4 * root.presentationScale
                     }
 
                     Text {
@@ -273,7 +295,7 @@ Item {
                         text: root.device ? root.device.url : ""
                         color: Theme.text
                         elide: Text.ElideMiddle
-                        font.pixelSize: 12
+                        font.pixelSize: Math.max(1, 12 * root.presentationScale)
                     }
 
                     Text {
@@ -282,7 +304,7 @@ Item {
                         text: root.device ? root.device.errorMessage : "Navigation failed"
                         color: Theme.textMuted
                         wrapMode: Text.WordWrap
-                        font.pixelSize: 11
+                        font.pixelSize: Math.max(1, 11 * root.presentationScale)
                     }
 
                     AppButton {
