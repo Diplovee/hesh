@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QStringList>
 #include <QtWebEngineQuick/QQuickWebEngineProfile>
 
 #include "devices/Device.hpp"
@@ -19,6 +20,13 @@ class WebDevice final : public Device
     Q_PROPERTY(QString errorMessage READ errorMessage NOTIFY runtimeStateChanged)
     Q_PROPERTY(bool canGoBack READ canGoBack NOTIFY navigationStateChanged)
     Q_PROPERTY(bool canGoForward READ canGoForward NOTIFY navigationStateChanged)
+    Q_PROPERTY(QStringList recentUrls READ recentUrls NOTIFY recentUrlsChanged)
+    Q_PROPERTY(QString fitMode READ fitMode WRITE setFitMode NOTIFY viewPreferencesChanged)
+    Q_PROPERTY(double manualScale READ manualScale WRITE setManualScale NOTIFY viewPreferencesChanged)
+    Q_PROPERTY(bool frameChromeVisible READ frameChromeVisible WRITE setFrameChromeVisible
+               NOTIFY viewPreferencesChanged)
+    Q_PROPERTY(bool devToolsVisible READ devToolsVisible WRITE setDevToolsVisible
+               NOTIFY viewPreferencesChanged)
     Q_PROPERTY(QQuickWebEngineProfile* browserProfile READ browserProfile CONSTANT)
     Q_PROPERTY(QString profileStoragePath READ profileStoragePath CONSTANT)
 
@@ -58,6 +66,21 @@ public:
     QString errorMessage() const;
     bool canGoBack() const;
     bool canGoForward() const;
+    QStringList recentUrls() const;
+    QString fitMode() const;
+    double manualScale() const;
+    bool frameChromeVisible() const;
+    bool devToolsVisible() const;
+
+    Q_INVOKABLE bool navigateTo(const QString& requestedUrl);
+    Q_INVOKABLE void setPendingNavigationUrl(const QString& url);
+    Q_INVOKABLE void commitPendingNavigation();
+    Q_INVOKABLE void discardPendingNavigation();
+    Q_INVOKABLE void setRecentUrls(const QStringList& urls);
+    void setFitMode(const QString& mode);
+    void setManualScale(double scale);
+    void setFrameChromeVisible(bool visible);
+    void setDevToolsVisible(bool visible);
     Q_INVOKABLE void setLoading(bool loading);
     Q_INVOKABLE void setRuntimeLoaded();
     Q_INVOKABLE void setRuntimeError(const QString& message);
@@ -69,10 +92,12 @@ public:
     QString profileStoragePath() const;
 
     static QString normalizeUrl(const QString& input);
+    static bool isValidUrl(const QString& input);
 
     void start() override;
     void stop() override;
     void setProfile(const DeviceProfile& profile) override;
+    void setUserAgent(const QString& userAgent) override;
 
 signals:
     void urlChanged();
@@ -81,6 +106,9 @@ signals:
     void presentationStateChanged();
     void runtimeStateChanged();
     void navigationStateChanged();
+    void recentUrlsChanged();
+    void viewPreferencesChanged();
+    void navigationRequested(const QString& url);
     void reloadRequested(bool bypassCache);
 
 private:
@@ -94,7 +122,16 @@ private:
     QString m_errorMessage;
     bool m_canGoBack = false;
     bool m_canGoForward = false;
+    QStringList m_recentUrls;
+    QString m_pendingNavigationUrl;
+    QString m_fitMode = QStringLiteral("Fit");
+    double m_manualScale = 1.0;
+    bool m_frameChromeVisible = true;
+    bool m_devToolsVisible = false;
     mutable QQuickWebEngineProfile* m_browserProfile = nullptr;
+
+    void rememberUrl(const QString& url);
+    void emitViewPreferencesChanged();
 };
 
 } // namespace Hesh

@@ -3,6 +3,7 @@
 #include <QDir>
 #include <QRegularExpression>
 #include <QStandardPaths>
+#include <QUrl>
 #include <QtWebEngineQuick/QQuickWebEngineProfile>
 
 #include <utility>
@@ -15,8 +16,11 @@ WebDevice::WebDevice(QString id,
                      QString url,
                      QObject* parent)
     : Device(std::move(id), std::move(name), DeviceType::Web, std::move(profile), parent)
-    , m_url(normalizeUrl(url))
+    , m_url(isValidUrl(url) ? normalizeUrl(url) : QString {})
 {
+    if (!m_url.isEmpty()) {
+        m_recentUrls.append(m_url);
+    }
 }
 
 QString WebDevice::url() const
@@ -27,14 +31,20 @@ QString WebDevice::url() const
 void WebDevice::setUrl(const QString& url)
 {
     const auto normalized = normalizeUrl(url);
-    if (normalized == m_url) {
+    if (!isValidUrl(normalized) || normalized == m_url) {
+        m_pendingNavigationUrl.clear();
         return;
     }
     m_url = normalized;
+    m_pendingNavigationUrl.clear();
+    rememberUrl(m_url);
     if (!m_errorMessage.isEmpty() || m_runtimeState == QStringLiteral("Error")) {
         m_errorMessage.clear();
         m_runtimeState = QStringLiteral("Idle");
         emit runtimeStateChanged();
+        if (status() == Status::Error) {
+            setStatus(Status::Running);
+        }
     }
     emit urlChanged();
     emit dataChanged();
@@ -62,6 +72,27 @@ QString WebDevice::normalizeUrl(const QString& input)
     // QUrl treats "localhost:3000" as a scheme. Prefixing only inputs that
     // lack a known browser scheme keeps ports, queries, and hashes intact.
     return QStringLiteral("http://") + trimmed;
+}
+
+bool WebDevice::isValidUrl(const QString& input)
+{
+    const auto normalized = normalizeUrl(input);
+    if (normalized.isEmpty()) {
+        return false;
+    }
+
+    const QUrl url(normalized);
+    const auto scheme = url.scheme().toLower();
+    if (scheme == QStringLiteral("http") || scheme == QStringLiteral("https")) {
+        return url.isValid() && !url.host().isEmpty();
+    }
+    if (scheme == QStringLiteral("about")) {
+        return url.isValid();
+    }
+    if (scheme == QStringLiteral("file") || scheme == QStringLiteral("data")) {
+        return url.isValid();
+    }
+    return false;
 }
 
 QString WebDevice::orientation() const
@@ -140,6 +171,130 @@ bool WebDevice::canGoForward() const
     return m_canGoForward;
 }
 
+QStringList WebDevice::recentUrls() const
+{
+    return m_recentUrls;
+}
+
+QString WebDevice::fitMode() const
+{
+    return m_fitMode;
+}
+
+double WebDevice::manualScale() const
+{
+    return m_manualScale;
+}
+
+bool WebDevice::frameChromeVisible() const
+{
+    return m_frameChromeVisible;
+}
+
+bool WebDevice::devToolsVisible() const
+{
+    return m_devToolsVisible;
+}
+
+bool WebDevice::navigateTo(const QString& requestedUrl)
+{
+    const auto normalized = normalizeUrl(requestedUrl);
+    if (!isValidUrl(normalized)) {
+        return false;
+    }
+    m_pendingNavigationUrl = normalized;
+    emit navigationRequested(normalized);
+    return true;
+}
+
+void WebDevice::setPendingNavigationUrl(const QString& url)
+{
+    const auto normalized = normalizeUrl(url);
+    if (isValidUrl(normalized) && normalized != m_url) {
+        m_pendingNavigationUrl = normalized;
+    }
+}
+
+void WebDevice::commitPendingNavigation()
+{
+    if (m_pendingNavigationUrl.isEmpty()) {
+        return;
+    }
+    const auto pending = m_pendingNavigationUrl;
+    m_pendingNavigationUrl.clear();
+    setUrl(pending);
+}
+
+void WebDevice::discardPendingNavigation()
+{
+    m_pendingNavigationUrl.clear();
+}
+
+void WebDevice::setRecentUrls(const QStringList& urls)
+{
+    QStringList normalizedUrls;
+    for (const auto& url : urls) {
+        const auto normalized = normalizeUrl(url);
+        if (!isValidUrl(normalized) || normalizedUrls.contains(normalized)) {
+            continue;
+        }
+        normalizedUrls.append(normalized);
+        if (normalizedUrls.size() >= 10) {
+            break;
+        }
+    }
+    if (!m_url.isEmpty()) {
+        normalizedUrls.removeAll(m_url);
+        normalizedUrls.prepend(m_url);
+    }
+    if (normalizedUrls == m_recentUrls) {
+        return;
+    }
+    m_recentUrls = normalizedUrls;
+    emit recentUrlsChanged();
+    emit dataChanged();
+}
+
+void WebDevice::setFitMode(const QString& mode)
+{
+    const auto normalized = mode.compare(QStringLiteral("Manual"), Qt::CaseInsensitive) == 0
+        ? QStringLiteral("Manual")
+        : QStringLiteral("Fit");
+    if (normalized == m_fitMode) {
+        return;
+    }
+    m_fitMode = normalized;
+    emitViewPreferencesChanged();
+}
+
+void WebDevice::setManualScale(double scale)
+{
+    const auto normalized = qBound(0.1, scale, 3.0);
+    if (qFuzzyCompare(normalized, m_manualScale)) {
+        return;
+    }
+    m_manualScale = normalized;
+    emitViewPreferencesChanged();
+}
+
+void WebDevice::setFrameChromeVisible(bool visible)
+{
+    if (visible == m_frameChromeVisible) {
+        return;
+    }
+    m_frameChromeVisible = visible;
+    emitViewPreferencesChanged();
+}
+
+void WebDevice::setDevToolsVisible(bool visible)
+{
+    if (visible == m_devToolsVisible) {
+        return;
+    }
+    m_devToolsVisible = visible;
+    emitViewPreferencesChanged();
+}
+
 void WebDevice::setLoading(bool loadingState)
 {
     if (m_loading == loadingState
@@ -153,25 +308,34 @@ void WebDevice::setLoading(bool loadingState)
         m_runtimeState = QStringLiteral("Idle");
     }
     emit runtimeStateChanged();
+    emit dataChanged();
 }
 
 void WebDevice::setRuntimeLoaded()
 {
+    commitPendingNavigation();
     const bool changed = m_loading || m_runtimeState != QStringLiteral("Loaded") || !m_errorMessage.isEmpty();
     m_loading = false;
     m_runtimeState = QStringLiteral("Loaded");
     m_errorMessage.clear();
+    if (status() == Status::Error) {
+        setStatus(Status::Running);
+    }
     if (changed) {
         emit runtimeStateChanged();
+        emit dataChanged();
     }
 }
 
 void WebDevice::setRuntimeError(const QString& message)
 {
+    discardPendingNavigation();
     m_loading = false;
     m_runtimeState = QStringLiteral("Error");
-    m_errorMessage = message.trimmed();
+    m_errorMessage = message.trimmed().isEmpty() ? QStringLiteral("Navigation failed") : message.trimmed();
     emit runtimeStateChanged();
+    setStatus(Status::Error);
+    emit dataChanged();
 }
 
 void WebDevice::setNavigationState(bool back, bool forward)
@@ -245,6 +409,33 @@ void WebDevice::setProfile(const DeviceProfile& profileValue)
     if (m_browserProfile) {
         m_browserProfile->setHttpUserAgent(userAgent());
     }
+}
+
+void WebDevice::setUserAgent(const QString& userAgentValue)
+{
+    Device::setUserAgent(userAgentValue);
+    if (m_browserProfile) {
+        m_browserProfile->setHttpUserAgent(userAgent());
+    }
+}
+
+void WebDevice::rememberUrl(const QString& url)
+{
+    if (!isValidUrl(url)) {
+        return;
+    }
+    m_recentUrls.removeAll(url);
+    m_recentUrls.prepend(url);
+    while (m_recentUrls.size() > 10) {
+        m_recentUrls.removeLast();
+    }
+    emit recentUrlsChanged();
+}
+
+void WebDevice::emitViewPreferencesChanged()
+{
+    emit viewPreferencesChanged();
+    emit dataChanged();
 }
 
 } // namespace Hesh

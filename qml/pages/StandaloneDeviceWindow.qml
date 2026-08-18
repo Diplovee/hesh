@@ -7,9 +7,9 @@ Window {
 
     property var device
     property var manager
-    property string scaleMode: "Fit"
-    property real requestedScale: 1.0
-    property bool devToolsVisible: false
+    property string scaleMode: device ? device.fitMode : "Fit"
+    property real requestedScale: device ? device.manualScale : 1.0
+    property bool devToolsVisible: device ? device.devToolsVisible : false
     property bool returningToHesh: false
 
     readonly property real frameWidth: deviceFrame.frameWidth
@@ -20,13 +20,12 @@ Window {
     readonly property real workAreaHeight: root.screen && root.screen.desktopAvailableHeight > 0
                                            ? root.screen.desktopAvailableHeight
                                            : root.frameHeight
-    readonly property real devToolsExtraWidth: root.devToolsVisible ? deviceFrame.devToolsWidth + 12 : 0
     readonly property real previewMaxWidth: Math.max(320, root.workAreaWidth * 0.50)
     readonly property real previewMaxHeight: Math.max(320, root.workAreaHeight * 0.88)
     readonly property real fitScale: root.frameWidth > 0 && root.frameHeight > 0
                                      ? Math.max(0.1,
                                                 Math.min(1.5,
-                                                         (root.previewMaxWidth - root.devToolsExtraWidth) / root.frameWidth,
+                                                         root.previewMaxWidth / root.frameWidth,
                                                          root.previewMaxHeight / root.frameHeight))
                                      : 1.0
     readonly property real effectiveScale: Math.max(0.1,
@@ -71,14 +70,38 @@ Window {
     }
 
     function setPresentationScale(scale) {
-        root.scaleMode = "Manual"
-        root.requestedScale = scale
+        if (root.device) {
+            root.device.manualScale = scale
+            root.device.fitMode = "Manual"
+        } else {
+            root.scaleMode = "Manual"
+            root.requestedScale = scale
+        }
         Qt.callLater(function() { root.updateNativeGeometry() })
     }
 
     function fitToWorkArea() {
-        root.scaleMode = "Fit"
+        if (root.device)
+            root.device.fitMode = "Fit"
+        else
+            root.scaleMode = "Fit"
         Qt.callLater(function() { root.updateNativeGeometry() })
+    }
+
+    onScaleModeChanged: {
+        if (root.device && root.device.fitMode !== root.scaleMode)
+            root.device.fitMode = root.scaleMode
+    }
+
+    onRequestedScaleChanged: {
+        if (root.device && root.scaleMode === "Manual"
+            && Math.abs(root.device.manualScale - root.requestedScale) > 0.001)
+            root.device.manualScale = root.requestedScale
+    }
+
+    onDevToolsVisibleChanged: {
+        if (root.device && root.device.devToolsVisible !== root.devToolsVisible)
+            root.device.devToolsVisible = root.devToolsVisible
     }
 
     function dispatchShortcut(actionId) {
@@ -142,7 +165,10 @@ Window {
         case "web.focusUrl":
             break
         case "web.devTools":
-            root.devToolsVisible = !root.devToolsVisible
+            if (root.device)
+                root.device.devToolsVisible = !root.device.devToolsVisible
+            else
+                root.devToolsVisible = !root.devToolsVisible
             Qt.callLater(function() { root.updateNativeGeometry() })
             break
         case "view.fit":
@@ -175,9 +201,15 @@ Window {
     DeviceFrame {
         id: deviceFrame
         device: root.device
-        frameChromeVisible: false
-        fitMode: "Manual"
+        manager: root.manager
+        frameChromeVisible: root.device ? root.device.frameChromeVisible : false
+        fitMode: root.scaleMode
         manualScale: root.effectiveScale
+        persistManualScale: false
+        // Standalone windows use the physical surface path. Embedded previews
+        // use a logical WebEngine viewport and scale the complete surface in
+        // QML; mixing those paths causes fractional text and centering errors.
+        physicalWebSurface: true
         devToolsVisible: root.devToolsVisible
         availableWidth: root.workAreaWidth
         availableHeight: root.workAreaHeight
@@ -233,15 +265,16 @@ Window {
         onFitRequested: root.fitToWorkArea()
         onScaleRequested: function(scale) { root.setPresentationScale(scale) }
         onDevToolsRequested: {
-            root.devToolsVisible = !root.devToolsVisible
+            if (root.device)
+                root.device.devToolsVisible = !root.device.devToolsVisible
+            else
+                root.devToolsVisible = !root.devToolsVisible
             Qt.callLater(function() { root.updateNativeGeometry() })
         }
         onCloseRequested: root.close()
     }
 
     Component.onCompleted: {
-        root.scaleMode = "Fit"
-        root.requestedScale = 1.0
         root.visible = true
         Qt.callLater(function() {
             root.requestActivate()

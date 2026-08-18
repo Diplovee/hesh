@@ -117,6 +117,17 @@ QString Device::userAgent() const
     return m_profile.userAgent;
 }
 
+void Device::setUserAgent(const QString& userAgent)
+{
+    const auto normalized = userAgent.trimmed();
+    if (normalized.isEmpty() || normalized == m_profile.userAgent) {
+        return;
+    }
+    m_profile.userAgent = normalized;
+    emit profileChanged();
+    emit dataChanged();
+}
+
 void Device::setProfile(const DeviceProfile& profile)
 {
     if (m_profile.name == profile.name

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 
 project(Hesh
-    VERSION 0.2.3
+    VERSION 0.2.4
     DESCRIPTION "A lightweight device development and emulation environment"
     LANGUAGES CXX
 )
@@ -95,12 +95,15 @@ qt_add_qml_module(hesh
         qml/components/DeviceFrame.qml
         qml/components/DeviceContextMenu.qml
         qml/components/DeviceListItem.qml
+        qml/components/DevToolsWindow.qml
         qml/components/EmptyState.qml
         qml/components/IconButton.qml
         qml/components/Sidebar.qml
         qml/components/StatusBadge.qml
         qml/components/StandaloneContextMenu.qml
+        qml/components/WebContextMenu.qml
         qml/dialogs/CreateDeviceDialog.qml
+        qml/dialogs/EditDeviceDialog.qml
         qml/pages/DeviceWorkspace.qml
         qml/pages/StandaloneDeviceWindow.qml
         qml/pages/ShortcutSettings.qml

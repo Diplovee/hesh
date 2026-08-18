@@ -10,10 +10,27 @@ Item {
 
     property var device
     property var manager
+    signal editDeviceRequested(string deviceId)
+    signal duplicateDeviceRequested(string deviceId)
+    signal removeDeviceRequested(string deviceId)
     readonly property bool isAndroid: !!root.device && root.device.type === "android"
     property string selectedFit: "Fit"
     readonly property var fitChoices: ["Fit", "25%", "50%", "75%", "100%", "125%"]
     readonly property var deviceFrame: frameLoader.item
+
+    function syncViewPreferences() {
+        if (!root.device)
+            root.selectedFit = "Fit"
+        else if (root.device.fitMode === "Manual")
+            root.selectedFit = Math.round(root.device.manualScale * 100) + "%"
+        else
+            root.selectedFit = "Fit"
+    }
+
+    function toggleFrameChrome() {
+        if (root.device && !root.isAndroid)
+            root.device.frameChromeVisible = !root.device.frameChromeVisible
+    }
 
     function applyFit(choice) {
         root.selectedFit = choice
@@ -58,8 +75,8 @@ Item {
     }
 
     function toggleDevTools() {
-        if (frameLoader.item && !root.isAndroid)
-            frameLoader.item.devToolsVisible = !frameLoader.item.devToolsVisible
+        if (root.device && !root.isAndroid)
+            root.device.devToolsVisible = !root.device.devToolsVisible
     }
 
     function focusUrl() {
@@ -146,6 +163,9 @@ Item {
             deviceStatus: root.device ? root.device.status : "Stopped"
             devicePresentationState: root.device && root.device.type === "web"
                                      ? root.device.presentationState : "Embedded"
+            onEditRequested: root.editDeviceRequested(root.device ? root.device.id : "")
+            onDuplicateRequested: root.duplicateDeviceRequested(root.device ? root.device.id : "")
+            onRemoveRequested: root.removeDeviceRequested(root.device ? root.device.id : "")
         }
 
         Rectangle {
@@ -207,11 +227,37 @@ Item {
                 }
                 onAccepted: {
                     if (root.device) {
-                        root.device.url = text
-                        if (frameLoader.item)
-                            frameLoader.item.navigate()
+                        if (frameLoader.item && !frameLoader.item.navigateTo(text))
+                            root.device.setRuntimeError("Enter a valid http or https URL")
                     }
                     focus = false
+                }
+            }
+
+            ComboBox {
+                id: recentUrlCombo
+                visible: !root.isAndroid && !!root.device
+                implicitWidth: 142
+                implicitHeight: 32
+                model: root.device ? root.device.recentUrls : []
+                leftPadding: 8
+                rightPadding: 22
+                contentItem: Text {
+                    text: recentUrlCombo.displayText.length > 0 ? recentUrlCombo.displayText : "Recent URLs"
+                    color: Theme.textMuted
+                    elide: Text.ElideMiddle
+                    verticalAlignment: Text.AlignVCenter
+                    font.pixelSize: 10
+                }
+                background: Rectangle {
+                    radius: Theme.radiusSmall
+                    color: Theme.input
+                    border.width: 1
+                    border.color: recentUrlCombo.activeFocus ? Theme.accentStrong : Theme.border
+                }
+                onActivated: {
+                    if (frameLoader.item)
+                        frameLoader.item.navigateTo(currentText)
                 }
             }
 
@@ -271,7 +317,10 @@ Item {
                     anchors.centerIn: parent
                     active: root.isAndroid || (root.device && root.device.presentationState !== "Standalone")
                     sourceComponent: root.isAndroid ? androidFrameComponent : webFrameComponent
-                    onItemChanged: root.applyFit(root.selectedFit)
+                    onItemChanged: {
+                        root.syncViewPreferences()
+                        root.applyFit(root.selectedFit)
+                    }
                 }
 
                 Component {
@@ -279,9 +328,13 @@ Item {
 
                     DeviceFrame {
                         device: root.device
+                        manager: root.manager
                         availableWidth: stage.width
                         availableHeight: stage.height
-                        devToolsVisible: false
+                        fitMode: root.device ? root.device.fitMode : "Fit"
+                        manualScale: root.device ? root.device.manualScale : 1.0
+                        frameChromeVisible: root.device ? root.device.frameChromeVisible : true
+                        devToolsVisible: root.device ? root.device.devToolsVisible : false
                     }
                 }
 
@@ -422,11 +475,20 @@ Item {
 
                 AppButton {
                     visible: !root.isAndroid
+                    text: frameLoader.item && frameLoader.item.frameChromeVisible ? "Hide Frame" : "Show Frame"
+                    compact: true
+                    secondary: true
+                    enabled: frameLoader.item !== null
+                    onClicked: root.toggleFrameChrome()
+                }
+
+                AppButton {
+                    visible: !root.isAndroid
                     text: frameLoader.item && frameLoader.item.devToolsVisible ? "Hide DevTools" : "DevTools"
                     compact: true
                     secondary: true
                     enabled: frameLoader.item !== null
-                    onClicked: if (frameLoader.item) frameLoader.item.devToolsVisible = !frameLoader.item.devToolsVisible
+                    onClicked: root.toggleDevTools()
                 }
 
                 Text {
@@ -444,9 +506,18 @@ Item {
     Connections {
         target: root.isAndroid ? null : root.device
 
+        function onViewPreferencesChanged() {
+            root.syncViewPreferences()
+        }
+
         function onUrlChanged() {
             if (!urlField.activeFocus)
                 urlField.text = root.device ? root.device.url : ""
         }
+    }
+
+    onDeviceChanged: {
+        root.syncViewPreferences()
+        urlField.text = root.device ? root.device.url : ""
     }
 }

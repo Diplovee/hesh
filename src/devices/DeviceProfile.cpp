@@ -1,5 +1,6 @@
 #include "DeviceProfile.hpp"
 
+#include <QJsonArray>
 #include <QJsonValue>
 
 namespace Hesh {
@@ -55,6 +56,19 @@ DeviceProfile DeviceProfile::fromName(const QString& profileName)
 
 QJsonObject deviceRecordToJson(const DeviceRecord& record)
 {
+    QJsonArray recentUrls;
+    for (const auto& url : record.recentUrls) {
+        recentUrls.append(url);
+    }
+
+    const QJsonObject viewPreferences {
+        {QStringLiteral("orientation"), record.orientation},
+        {QStringLiteral("fitMode"), record.fitMode},
+        {QStringLiteral("manualScale"), record.manualScale},
+        {QStringLiteral("frameChromeVisible"), record.frameChromeVisible},
+        {QStringLiteral("devToolsVisible"), record.devToolsVisible},
+    };
+
     return {
         {QStringLiteral("id"), record.id},
         {QStringLiteral("name"), record.name},
@@ -62,6 +76,9 @@ QJsonObject deviceRecordToJson(const DeviceRecord& record)
         {QStringLiteral("profile"), record.profileName},
         {QStringLiteral("url"), record.url},
         {QStringLiteral("orientation"), record.orientation},
+        {QStringLiteral("userAgent"), record.userAgent},
+        {QStringLiteral("recentUrls"), recentUrls},
+        {QStringLiteral("viewPreferences"), viewPreferences},
         {QStringLiteral("avd"), record.avdName},
         {QStringLiteral("serial"), record.adbSerial},
     };
@@ -82,6 +99,38 @@ std::optional<DeviceRecord> deviceRecordFromJson(const QJsonObject& object)
     record.profileName = object.value(QStringLiteral("profile")).toString(QStringLiteral("Pixel 7"));
     record.url = object.value(QStringLiteral("url")).toString(QStringLiteral("http://localhost:3000"));
     record.orientation = object.value(QStringLiteral("orientation")).toString(QStringLiteral("portrait"));
+    record.userAgent = object.value(QStringLiteral("userAgent")).toString();
+
+    const auto recentUrls = object.value(QStringLiteral("recentUrls"));
+    if (recentUrls.isArray()) {
+        for (const auto& value : recentUrls.toArray()) {
+            if (value.isString()) {
+                record.recentUrls.append(value.toString());
+            }
+        }
+    }
+
+    const auto viewPreferences = object.value(QStringLiteral("viewPreferences"));
+    if (viewPreferences.isObject()) {
+        const auto view = viewPreferences.toObject();
+        record.orientation = view.value(QStringLiteral("orientation"))
+                                 .toString(record.orientation);
+        record.fitMode = view.value(QStringLiteral("fitMode"))
+                             .toString(QStringLiteral("Fit"));
+        record.manualScale = view.value(QStringLiteral("manualScale"))
+                                 .toDouble(1.0);
+        record.frameChromeVisible = view.value(QStringLiteral("frameChromeVisible"))
+                                        .toBool(true);
+        record.devToolsVisible = view.value(QStringLiteral("devToolsVisible"))
+                                     .toBool(false);
+    }
+
+    if (record.fitMode.compare(QStringLiteral("Manual"), Qt::CaseInsensitive) != 0) {
+        record.fitMode = QStringLiteral("Fit");
+    } else {
+        record.fitMode = QStringLiteral("Manual");
+    }
+    record.manualScale = qBound(0.1, record.manualScale, 3.0);
     record.avdName = object.value(QStringLiteral("avd")).toString();
     record.adbSerial = object.value(QStringLiteral("serial")).toString();
     return record;

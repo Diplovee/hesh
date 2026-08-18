@@ -2,6 +2,10 @@
 
 #include <QSignalSpy>
 #include <QTemporaryDir>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QSettings>
 
 #include "app/Settings.hpp"
 #include "app/ShortcutManager.hpp"
@@ -36,6 +40,12 @@ private slots:
     void shortcutPersistence();
     void shortcutConflictsAndReset();
     void webReloadRequests();
+    void editAndPersistWebDevice();
+    void duplicateWebDeviceIsIsolated();
+    void viewPreferencesRoundTrip();
+    void legacySettingsUseSafeViewDefaults();
+    void invalidUrlsAreRejected();
+    void failedNavigationKeepsLastValidUrl();
 };
 
 void DeviceTests::createWebDevice()
@@ -417,6 +427,176 @@ void DeviceTests::webReloadRequests()
     device.hardReload();
     QCOMPARE(spy.count(), 2);
     QCOMPARE(spy.at(1).at(0).toBool(), true);
+}
+
+void DeviceTests::editAndPersistWebDevice()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto settingsPath = directory.filePath(QStringLiteral("settings.ini"));
+
+    {
+        Settings settings(QStringLiteral("HeshTests"), QStringLiteral("Edit"), settingsPath);
+        DeviceManager manager(&settings);
+        auto* device = manager.createWebDevice(QStringLiteral("Before"), QStringLiteral("Pixel 7"),
+                                               QStringLiteral("http://localhost:3000"));
+        QVERIFY(manager.editWebDevice(device->id(),
+                                      QStringLiteral("After"),
+                                      QStringLiteral("Galaxy S24"),
+                                      QStringLiteral("localhost:4173/app"),
+                                      QStringLiteral("Landscape"),
+                                      QStringLiteral("HeshTest/1.0")));
+        QCOMPARE(device->name(), QStringLiteral("After"));
+        QCOMPARE(device->profileName(), QStringLiteral("Galaxy S24"));
+        QCOMPARE(device->url(), QStringLiteral("http://localhost:4173/app"));
+        QCOMPARE(device->orientation(), QStringLiteral("Landscape"));
+        QCOMPARE(device->userAgent(), QStringLiteral("HeshTest/1.0"));
+    }
+
+    Settings settings(QStringLiteral("HeshTests"), QStringLiteral("Edit"), settingsPath);
+    DeviceManager reloaded(&settings);
+    const auto* device = qobject_cast<const WebDevice*>(reloaded.selectedDevice());
+    QVERIFY(device != nullptr);
+    QCOMPARE(device->name(), QStringLiteral("After"));
+    QCOMPARE(device->profileName(), QStringLiteral("Galaxy S24"));
+    QCOMPARE(device->url(), QStringLiteral("http://localhost:4173/app"));
+    QCOMPARE(device->orientation(), QStringLiteral("Landscape"));
+    QCOMPARE(device->userAgent(), QStringLiteral("HeshTest/1.0"));
+}
+
+void DeviceTests::duplicateWebDeviceIsIsolated()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    Settings settings(QStringLiteral("HeshTests"), QStringLiteral("Duplicate"),
+                      directory.filePath(QStringLiteral("settings.ini")));
+    DeviceManager manager(&settings);
+    auto* source = manager.createWebDevice(QStringLiteral("Source"), QStringLiteral("Pixel 8"),
+                                           QStringLiteral("http://localhost:3000"));
+    source->setUserAgent(QStringLiteral("HeshSource/1.0"));
+    source->setOrientation(QStringLiteral("Landscape"));
+    source->setFitMode(QStringLiteral("Manual"));
+    source->setManualScale(0.75);
+
+    auto* duplicate = manager.duplicateWebDevice(source->id(), QStringLiteral("Copy"));
+    QVERIFY(duplicate != nullptr);
+    QVERIFY(duplicate->id() != source->id());
+    QCOMPARE(duplicate->name(), QStringLiteral("Copy"));
+    QCOMPARE(duplicate->profileName(), source->profileName());
+    QCOMPARE(duplicate->url(), source->url());
+    QCOMPARE(duplicate->orientation(), source->orientation());
+    QCOMPARE(duplicate->userAgent(), source->userAgent());
+    QCOMPARE(duplicate->fitMode(), source->fitMode());
+    QCOMPARE(duplicate->manualScale(), source->manualScale());
+    QVERIFY(duplicate->profileStoragePath() != source->profileStoragePath());
+}
+
+void DeviceTests::viewPreferencesRoundTrip()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto settingsPath = directory.filePath(QStringLiteral("settings.ini"));
+
+    {
+        Settings settings(QStringLiteral("HeshTests"), QStringLiteral("ViewPreferences"), settingsPath);
+        DeviceManager manager(&settings);
+        auto* device = manager.createWebDevice(QStringLiteral("Preview"), QStringLiteral("Pixel 7"),
+                                               QStringLiteral("http://localhost:3000"));
+        device->setFitMode(QStringLiteral("Manual"));
+        device->setManualScale(1.25);
+        device->setFrameChromeVisible(false);
+        device->setDevToolsVisible(true);
+        device->setRecentUrls({QStringLiteral("https://example.com"),
+                               QStringLiteral("http://localhost:3000")});
+    }
+
+    Settings settings(QStringLiteral("HeshTests"), QStringLiteral("ViewPreferences"), settingsPath);
+    DeviceManager reloaded(&settings);
+    const auto* device = qobject_cast<const WebDevice*>(reloaded.selectedDevice());
+    QVERIFY(device != nullptr);
+    QCOMPARE(device->fitMode(), QStringLiteral("Manual"));
+    QCOMPARE(device->manualScale(), 1.25);
+    QVERIFY(!device->frameChromeVisible());
+    QVERIFY(device->devToolsVisible());
+    QCOMPARE(device->recentUrls().first(), QStringLiteral("http://localhost:3000"));
+    QVERIFY(device->recentUrls().contains(QStringLiteral("https://example.com")));
+}
+
+void DeviceTests::legacySettingsUseSafeViewDefaults()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto settingsPath = directory.filePath(QStringLiteral("settings.ini"));
+
+    QJsonObject legacy {
+        {QStringLiteral("id"), QStringLiteral("legacy")},
+        {QStringLiteral("name"), QStringLiteral("Legacy")},
+        {QStringLiteral("type"), QStringLiteral("web")},
+        {QStringLiteral("profile"), QStringLiteral("Pixel 7")},
+        {QStringLiteral("url"), QStringLiteral("http://localhost:3000")},
+    };
+    QSettings raw(settingsPath, QSettings::IniFormat);
+    raw.setValue(QStringLiteral("devices"),
+                 QJsonDocument(QJsonArray {legacy}).toJson(QJsonDocument::Compact));
+    raw.sync();
+
+    Settings settings(QStringLiteral("HeshTests"), QStringLiteral("Legacy"), settingsPath);
+    DeviceManager manager(&settings);
+    const auto* device = qobject_cast<const WebDevice*>(manager.selectedDevice());
+    QVERIFY(device != nullptr);
+    QCOMPARE(device->fitMode(), QStringLiteral("Fit"));
+    QCOMPARE(device->manualScale(), 1.0);
+    QVERIFY(device->frameChromeVisible());
+    QVERIFY(!device->devToolsVisible());
+}
+
+void DeviceTests::invalidUrlsAreRejected()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    Settings settings(QStringLiteral("HeshTests"), QStringLiteral("InvalidUrls"),
+                      directory.filePath(QStringLiteral("settings.ini")));
+    DeviceManager manager(&settings);
+    QVERIFY(manager.createWebDevice(QStringLiteral("Invalid"), QStringLiteral("Pixel 7"),
+                                    QStringLiteral("not a url"))
+            == nullptr);
+    auto* device = manager.createWebDevice(QStringLiteral("Valid"), QStringLiteral("Pixel 7"), {});
+    QVERIFY(device != nullptr);
+    QVERIFY(!manager.editWebDevice(device->id(), QStringLiteral("Valid"), QStringLiteral("Pixel 7"),
+                                   QStringLiteral(" "), QStringLiteral("Portrait"), {}));
+    QVERIFY(!WebDevice::isValidUrl(QString {}));
+    QVERIFY(!WebDevice::isValidUrl(QStringLiteral("http://")));
+}
+
+void DeviceTests::failedNavigationKeepsLastValidUrl()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto settingsPath = directory.filePath(QStringLiteral("settings.ini"));
+
+    {
+        Settings settings(QStringLiteral("HeshTests"), QStringLiteral("Navigation"), settingsPath);
+        DeviceManager manager(&settings);
+        auto* device = manager.createWebDevice(QStringLiteral("Navigation"), QStringLiteral("Pixel 7"),
+                                               QStringLiteral("http://localhost:3000"));
+        QVERIFY(device->navigateTo(QStringLiteral("https://example.com/next")));
+        device->discardPendingNavigation();
+        QCOMPARE(device->url(), QStringLiteral("http://localhost:3000"));
+        QVERIFY(device->navigateTo(QStringLiteral("https://example.com/next")));
+        device->commitPendingNavigation();
+        QCOMPARE(device->url(), QStringLiteral("https://example.com/next"));
+        device->setRuntimeError(QStringLiteral("Connection refused"));
+        QCOMPARE(device->statusName(), QStringLiteral("Error"));
+        QCOMPARE(device->url(), QStringLiteral("https://example.com/next"));
+    }
+
+    Settings settings(QStringLiteral("HeshTests"), QStringLiteral("Navigation"), settingsPath);
+    DeviceManager reloaded(&settings);
+    QVERIFY(reloaded.selectedDevice() != nullptr);
+    QCOMPARE(qobject_cast<const WebDevice*>(reloaded.selectedDevice())->url(),
+             QStringLiteral("https://example.com/next"));
 }
 
 QTEST_MAIN(DeviceTests)

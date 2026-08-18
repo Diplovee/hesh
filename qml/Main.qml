@@ -18,6 +18,8 @@ ApplicationWindow {
     title: "Hesh"
     property var standaloneWindows: ({})
     property bool shortcutSettingsOpen: false
+    property string pendingRemoveId: ""
+    property string pendingRemoveName: ""
 
     property bool maximized: false
 
@@ -31,6 +33,27 @@ ApplicationWindow {
     function hideToTray() {
         heshApplication.hideToTray()
         window.hide()
+    }
+
+    function openEditDevice(id) {
+        const device = deviceManager.deviceById(id)
+        if (device)
+            editDeviceDialog.openFor(device, false)
+    }
+
+    function openDuplicateDevice(id) {
+        const device = deviceManager.webDevice(id)
+        if (device)
+            editDeviceDialog.openFor(device, true)
+    }
+
+    function requestRemoveDevice(id) {
+        const device = deviceManager.deviceById(id)
+        if (!device)
+            return
+        window.pendingRemoveId = id
+        window.pendingRemoveName = device.name
+        removeDeviceDialog.open()
     }
 
     function dispatchShortcut(actionId, targetDeviceId) {
@@ -372,6 +395,9 @@ ApplicationWindow {
                     Layout.preferredWidth: 252
                     manager: deviceManager
                     onAddDeviceRequested: createDeviceDialog.open()
+                    onEditDeviceRequested: window.openEditDevice(deviceId)
+                    onDuplicateDeviceRequested: window.openDuplicateDevice(deviceId)
+                    onRemoveDeviceRequested: window.requestRemoveDevice(deviceId)
                 }
 
                 Rectangle {
@@ -391,6 +417,9 @@ ApplicationWindow {
                         visible: deviceManager.deviceCount > 0
                         manager: deviceManager
                         device: deviceManager.selectedDevice
+                        onEditDeviceRequested: window.openEditDevice(deviceId)
+                        onDuplicateDeviceRequested: window.openDuplicateDevice(deviceId)
+                        onRemoveDeviceRequested: window.requestRemoveDevice(deviceId)
                     }
                 }
             }
@@ -439,6 +468,48 @@ ApplicationWindow {
     CreateDeviceDialog {
         id: createDeviceDialog
         manager: deviceManager
+    }
+
+    EditDeviceDialog {
+        id: editDeviceDialog
+        manager: deviceManager
+    }
+
+    Dialog {
+        id: removeDeviceDialog
+        anchors.centerIn: Overlay.overlay
+        width: Overlay.overlay ? Math.min(420, Overlay.overlay.width - 32) : 420
+        modal: true
+        title: "Remove device?"
+        standardButtons: Dialog.Cancel | Dialog.Ok
+
+        contentItem: ColumnLayout {
+            spacing: 8
+
+            Text {
+                Layout.fillWidth: true
+                text: "Remove “" + window.pendingRemoveName
+                      + "”? Its saved configuration will be deleted."
+                color: Theme.text
+                wrapMode: Text.WordWrap
+                font.pixelSize: 12
+            }
+
+            Text {
+                Layout.fillWidth: true
+                text: "The browser profile directory is kept on disk so recovery tools can inspect it later."
+                color: Theme.textMuted
+                wrapMode: Text.WordWrap
+                font.pixelSize: 10
+            }
+        }
+
+        onAccepted: {
+            if (window.pendingRemoveId.length > 0)
+                deviceManager.removeDevice(window.pendingRemoveId)
+            window.pendingRemoveId = ""
+            window.pendingRemoveName = ""
+        }
     }
 
     ShortcutSettings {

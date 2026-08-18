@@ -28,6 +28,7 @@ public:
         DeviceProfileRole,
         DeviceUrlRole,
         DevicePresentationRole,
+        DeviceRuntimeStateRole,
     };
     Q_ENUM(Role)
 
@@ -67,6 +68,16 @@ public:
     Q_INVOKABLE WebDevice* createWebDevice(const QString& name,
                                            const QString& profileName,
                                            const QString& url);
+    Q_INVOKABLE WebDevice* webDevice(const QString& id) const;
+    Q_INVOKABLE Device* deviceById(const QString& id) const;
+    Q_INVOKABLE bool renameDevice(const QString& id, const QString& name);
+    Q_INVOKABLE bool editWebDevice(const QString& id,
+                                   const QString& name,
+                                   const QString& profileName,
+                                   const QString& url,
+                                   const QString& orientation,
+                                   const QString& userAgent);
+    Q_INVOKABLE WebDevice* duplicateWebDevice(const QString& id, const QString& name);
     Q_INVOKABLE AndroidDevice* createAndroidDevice(const QString& name,
                                                    const QString& profileName,
                                                    const QString& avdName,

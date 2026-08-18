@@ -12,6 +12,9 @@ Popup {
     property string deviceType: "web"
     property string deviceStatus: "Stopped"
     property string devicePresentationState: "Embedded"
+    signal editRequested()
+    signal duplicateRequested()
+    signal removeRequested()
     readonly property bool isWebDevice: root.deviceType === "web"
     readonly property bool isStandalone: root.devicePresentationState === "Standalone"
     readonly property bool deviceLocked: root.deviceType === "android"
@@ -56,10 +59,9 @@ Popup {
     }
 
     function removeDevice() {
-        if (root.manager && root.deviceId.length > 0) {
-            root.manager.removeDevice(root.deviceId)
-        }
         close()
+        if (root.deviceId.length > 0)
+            root.removeRequested()
     }
 
     function reloadDevice(hardReload) {
@@ -104,6 +106,61 @@ Popup {
                 font.pixelSize: 10
                 font.weight: Font.DemiBold
                 font.letterSpacing: 0.7
+            }
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 36
+            radius: 5
+            color: editMouse.containsMouse ? Theme.panelSoft : "transparent"
+
+            Text {
+                anchors.left: parent.left
+                anchors.leftMargin: 10
+                anchors.verticalCenter: parent.verticalCenter
+                text: root.isWebDevice ? "Edit Device" : "Rename Device"
+                color: Theme.text
+                font.pixelSize: 12
+            }
+
+            MouseArea {
+                id: editMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                    root.close()
+                    root.editRequested()
+                }
+            }
+        }
+
+        Rectangle {
+            visible: root.isWebDevice
+            Layout.fillWidth: true
+            Layout.preferredHeight: 36
+            radius: 5
+            color: duplicateMouse.containsMouse ? Theme.panelSoft : "transparent"
+
+            Text {
+                anchors.left: parent.left
+                anchors.leftMargin: 10
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Duplicate Device"
+                color: Theme.text
+                font.pixelSize: 12
+            }
+
+            MouseArea {
+                id: duplicateMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                    root.close()
+                    root.duplicateRequested()
+                }
             }
         }
 

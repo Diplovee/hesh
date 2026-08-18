@@ -9,6 +9,7 @@ Popup {
     property var manager
     property int step: 0
     property string selectedType: ""
+    property string errorMessage: ""
     readonly property bool androidFeatureEnabled: !!root.manager
                                                   && !!root.manager.androidFeatureEnabled
 
@@ -37,6 +38,7 @@ Popup {
         avdField.text = ""
         serialField.text = "emulator-5554"
         profileCombo.currentIndex = 0
+        errorMessage = ""
     }
 
     onOpened: reset()
@@ -288,6 +290,14 @@ Popup {
             }
 
             Text {
+                visible: root.selectedType === "web" && root.errorMessage.length > 0
+                text: root.errorMessage
+                color: Theme.error
+                wrapMode: Text.WordWrap
+                font.pixelSize: 10
+            }
+
+            Text {
                 text: "Device profile"
                 color: Theme.textMuted
                 font.pixelSize: 11
@@ -470,15 +480,22 @@ Popup {
                 compact: true
                 onClicked: {
                     if (root.manager) {
+                        let created = null
                         if (root.selectedType === "android") {
-                            root.manager.createAndroidDevice(nameField.text,
-                                                             profileCombo.currentText,
-                                                             avdField.text,
-                                                             serialField.text)
+                            created = root.manager.createAndroidDevice(nameField.text,
+                                                                       profileCombo.currentText,
+                                                                       avdField.text,
+                                                                       serialField.text)
                         } else {
-                            root.manager.createWebDevice(nameField.text,
-                                                         profileCombo.currentText,
-                                                         urlField.text)
+                            created = root.manager.createWebDevice(nameField.text,
+                                                                   profileCombo.currentText,
+                                                                   urlField.text)
+                        }
+                        if (!created) {
+                            root.errorMessage = root.selectedType === "web"
+                                ? "Enter a valid browser URL."
+                                : "The Android device could not be created."
+                            return
                         }
                     }
                     root.close()

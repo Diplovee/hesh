@@ -5,6 +5,8 @@ web devices and local Android virtual devices. It is a
 native Qt 6 application: QML owns presentation while modern C++ owns
 application state, device lifecycle, profiles, and persistence.
 
+Current release: **0.2.4**
+
 ## Phase 2 status
 
 Implemented:
@@ -99,10 +101,13 @@ Application
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for ownership, persistence,
 logical viewport scaling, presentation hosts, and the Android runtime boundary.
+See [docs/WEB_DEVICE_RENDERING.md](docs/WEB_DEVICE_RENDERING.md) for the
+viewport and compositor rules that keep embedded and standalone web devices
+aligned.
 See [docs/ANDROID_SETUP.md](docs/ANDROID_SETUP.md) for the Omarchy/Arch SDK,
 ADB, emulator, AVD, and scrcpy setup.
 
-The Android runtime is locked by default in version 0.2.3 because an emulator
+The Android runtime is locked by default in version 0.2.4 because an emulator
 can exceed available system memory on lighter machines. The implementation is
 retained and can be explicitly enabled with `-DHESH_ENABLE_ANDROID=ON` when
 the host has enough resources.
