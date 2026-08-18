@@ -22,10 +22,45 @@ Window {
             root.device.devToolsVisible = false
     }
 
+    function forceDarkTheme() {
+        devToolsView.runJavaScript(
+            "(function() {"
+            + "  var root = document.documentElement;"
+            + "  if (!root) return;"
+            + "  root.classList.remove('theme-with-light-background');"
+            + "  root.classList.add('theme-with-dark-background');"
+            + "  root.style.colorScheme = 'dark';"
+            + "  if (document.body) document.body.style.colorScheme = 'dark';"
+            + "})();")
+    }
+
     WebEngineView {
+        id: devToolsView
         anchors.fill: parent
         anchors.margins: 1
         backgroundColor: Theme.panel
         inspectedView: root.inspectedView
+
+        // Chromium DevTools uses this class for its dark design-token set.
+        // The inspected page is a separate WebEngineView and is not changed.
+        userScripts.collection: [{
+            name: "hesh-devtools-dark-theme",
+            injectionPoint: WebEngineScript.DocumentReady,
+            worldId: WebEngineScript.MainWorld,
+            runsOnSubFrames: false,
+            sourceCode: "(function() {"
+                         + "  var root = document.documentElement;"
+                         + "  if (!root) return;"
+                         + "  root.classList.remove('theme-with-light-background');"
+                         + "  root.classList.add('theme-with-dark-background');"
+                         + "  root.style.colorScheme = 'dark';"
+                         + "  if (document.body) document.body.style.colorScheme = 'dark';"
+                         + "})();"
+        }]
+
+        onLoadingChanged: function(loadRequest) {
+            if (loadRequest.status === WebEngineView.LoadSucceededStatus)
+                Qt.callLater(root.forceDarkTheme)
+        }
     }
 }
