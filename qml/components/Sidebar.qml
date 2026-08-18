@@ -9,6 +9,9 @@ Rectangle {
 
     property var manager
     signal addDeviceRequested()
+    signal editDeviceRequested(string deviceId)
+    signal duplicateDeviceRequested(string deviceId)
+    signal removeDeviceRequested(string deviceId)
     color: Theme.panel
     border.width: 1
     border.color: Theme.border
@@ -55,7 +58,13 @@ Rectangle {
                 manager: root.manager
                 selected: root.manager && root.manager.selectedDevice
                           && root.manager.selectedDevice.id === deviceId
+                deviceType: deviceType
+                devicePresentationState: devicePresentationState
+                deviceRuntimeState: deviceRuntimeState
                 onActivated: if (root.manager) root.manager.selectDevice(deviceId)
+                onEditRequested: root.editDeviceRequested(deviceId)
+                onDuplicateRequested: root.duplicateDeviceRequested(deviceId)
+                onRemoveRequested: root.removeDeviceRequested(deviceId)
             }
 
             Text {

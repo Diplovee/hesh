@@ -3,6 +3,7 @@
 #include <QJsonObject>
 #include <QList>
 #include <QString>
+#include <QStringList>
 #include <QVariantList>
 
 #include <optional>
@@ -36,6 +37,15 @@ struct DeviceRecord
     QString type;
     QString profileName;
     QString url;
+    QString orientation = QStringLiteral("portrait");
+    QString userAgent;
+    QStringList recentUrls;
+    QString fitMode = QStringLiteral("Fit");
+    double manualScale = 1.0;
+    bool frameChromeVisible = true;
+    bool devToolsVisible = false;
+    QString avdName;
+    QString adbSerial;
 };
 
 QJsonObject deviceRecordToJson(const DeviceRecord& record);

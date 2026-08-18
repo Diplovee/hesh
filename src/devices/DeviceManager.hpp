@@ -6,6 +6,7 @@
 #include <QVariantList>
 
 #include "Device.hpp"
+#include "android/AndroidDevice.hpp"
 #include "web/WebDevice.hpp"
 
 namespace Hesh {
@@ -26,6 +27,8 @@ public:
         DeviceStatusRole,
         DeviceProfileRole,
         DeviceUrlRole,
+        DevicePresentationRole,
+        DeviceRuntimeStateRole,
     };
     Q_ENUM(Role)
 
@@ -51,6 +54,7 @@ class DeviceManager final : public QObject
     Q_PROPERTY(Device* selectedDevice READ selectedDevice NOTIFY selectedDeviceChanged)
     Q_PROPERTY(int deviceCount READ deviceCount NOTIFY deviceCountChanged)
     Q_PROPERTY(QVariantList availableProfiles READ availableProfiles CONSTANT)
+    Q_PROPERTY(bool androidFeatureEnabled READ androidFeatureEnabled CONSTANT)
 
 public:
     explicit DeviceManager(Settings* settings, QObject* parent = nullptr);
@@ -59,18 +63,42 @@ public:
     Device* selectedDevice() const;
     int deviceCount() const;
     QVariantList availableProfiles() const;
+    bool androidFeatureEnabled() const;
 
     Q_INVOKABLE WebDevice* createWebDevice(const QString& name,
                                            const QString& profileName,
                                            const QString& url);
+    Q_INVOKABLE WebDevice* webDevice(const QString& id) const;
+    Q_INVOKABLE Device* deviceById(const QString& id) const;
+    Q_INVOKABLE bool renameDevice(const QString& id, const QString& name);
+    Q_INVOKABLE bool editWebDevice(const QString& id,
+                                   const QString& name,
+                                   const QString& profileName,
+                                   const QString& url,
+                                   const QString& orientation,
+                                   const QString& userAgent);
+    Q_INVOKABLE WebDevice* duplicateWebDevice(const QString& id, const QString& name);
+    Q_INVOKABLE AndroidDevice* createAndroidDevice(const QString& name,
+                                                   const QString& profileName,
+                                                   const QString& avdName,
+                                                   const QString& adbSerial);
     Q_INVOKABLE void removeDevice(const QString& id);
     Q_INVOKABLE void selectDevice(const QString& id);
+    Q_INVOKABLE void selectNextDevice();
+    Q_INVOKABLE void selectPreviousDevice();
     Q_INVOKABLE void startDevice(const QString& id);
     Q_INVOKABLE void stopDevice(const QString& id);
+    Q_INVOKABLE bool reloadDevice(const QString& id, bool hardReload = false);
+    Q_INVOKABLE bool reloadSelectedDevice(bool hardReload = false);
+    Q_INVOKABLE bool openStandalone(const QString& id);
+    Q_INVOKABLE void returnToEmbedded(const QString& id);
+    Q_INVOKABLE bool isStandalone(const QString& id) const;
 
 signals:
     void selectedDeviceChanged();
     void deviceCountChanged();
+    void standaloneRequested(WebDevice* device);
+    void embeddedRequested(WebDevice* device);
 
 private:
     void load();

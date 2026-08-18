@@ -4,6 +4,7 @@
 #include <QUuid>
 
 #include "app/Settings.hpp"
+#include "app/FeatureFlags.hpp"
 #include "web/WebDevice.hpp"
 
 namespace Hesh {
@@ -44,6 +45,14 @@ QVariant DeviceListModel::data(const QModelIndex& index, int role) const
         const auto* webDevice = qobject_cast<const WebDevice*>(device);
         return webDevice ? webDevice->url() : QString {};
     }
+    case DevicePresentationRole: {
+        const auto* webDevice = qobject_cast<const WebDevice*>(device);
+        return webDevice ? webDevice->presentationState() : QStringLiteral("Embedded");
+    }
+    case DeviceRuntimeStateRole: {
+        const auto* webDevice = qobject_cast<const WebDevice*>(device);
+        return webDevice ? webDevice->runtimeState() : device->statusName();
+    }
     case Qt::DisplayRole:
         return device->name();
     default:
@@ -62,6 +71,8 @@ QHash<int, QByteArray> DeviceListModel::roleNames() const
         {DeviceStatusRole, "deviceStatus"},
         {DeviceProfileRole, "deviceProfile"},
         {DeviceUrlRole, "deviceUrl"},
+        {DevicePresentationRole, "devicePresentationState"},
+        {DeviceRuntimeStateRole, "deviceRuntimeState"},
     };
 }
 
@@ -120,6 +131,11 @@ QVariantList DeviceManager::availableProfiles() const
     return deviceProfileCatalogForQml();
 }
 
+bool DeviceManager::androidFeatureEnabled() const
+{
+    return androidRuntimeEnabled;
+}
+
 WebDevice* DeviceManager::createWebDevice(const QString& requestedName,
                                           const QString& profileName,
                                           const QString& requestedUrl)
@@ -129,10 +145,115 @@ WebDevice* DeviceManager::createWebDevice(const QString& requestedName,
         : requestedName.trimmed();
     const auto url = requestedUrl.trimmed().isEmpty()
         ? QStringLiteral("http://localhost:3000")
-        : requestedUrl.trimmed();
+        : WebDevice::normalizeUrl(requestedUrl);
+    if (!WebDevice::isValidUrl(url)) {
+        return nullptr;
+    }
     const auto profile = DeviceProfile::fromName(profileName);
     auto* device = new WebDevice(
         QUuid::createUuid().toString(QUuid::WithoutBraces), name, profile, url, this);
+    addDevice(device, true);
+    device->start();
+    persist();
+    return device;
+}
+
+WebDevice* DeviceManager::webDevice(const QString& id) const
+{
+    return qobject_cast<WebDevice*>(findById(id));
+}
+
+Device* DeviceManager::deviceById(const QString& id) const
+{
+    return findById(id);
+}
+
+bool DeviceManager::renameDevice(const QString& id, const QString& requestedName)
+{
+    auto* device = findById(id);
+    const auto name = requestedName.trimmed();
+    if (!device || name.isEmpty()) {
+        return false;
+    }
+    device->setName(name);
+    persist();
+    return true;
+}
+
+bool DeviceManager::editWebDevice(const QString& id,
+                                  const QString& requestedName,
+                                  const QString& profileName,
+                                  const QString& requestedUrl,
+                                  const QString& orientation,
+                                  const QString& requestedUserAgent)
+{
+    auto* device = webDevice(id);
+    const auto name = requestedName.trimmed();
+    const auto normalizedUrl = WebDevice::normalizeUrl(requestedUrl);
+    const auto profile = DeviceProfile::fromName(profileName);
+    if (!device || name.isEmpty() || !WebDevice::isValidUrl(normalizedUrl)
+        || profile.name != profileName.trimmed()) {
+        return false;
+    }
+
+    device->setName(name);
+    device->setProfile(profile);
+    device->setUserAgent(requestedUserAgent.trimmed().isEmpty()
+                             ? profile.userAgent
+                             : requestedUserAgent.trimmed());
+    device->setUrl(normalizedUrl);
+    device->setOrientation(orientation);
+    persist();
+    return true;
+}
+
+WebDevice* DeviceManager::duplicateWebDevice(const QString& id, const QString& requestedName)
+{
+    const auto* source = webDevice(id);
+    if (!source) {
+        return nullptr;
+    }
+
+    const auto name = requestedName.trimmed().isEmpty()
+        ? source->name() + QStringLiteral(" Copy")
+        : requestedName.trimmed();
+    auto* duplicate = new WebDevice(
+        QUuid::createUuid().toString(QUuid::WithoutBraces),
+        name,
+        source->profile(),
+        source->url(),
+        this);
+    duplicate->setOrientation(source->orientation());
+    duplicate->setUserAgent(source->userAgent());
+    duplicate->setRecentUrls(source->recentUrls());
+    duplicate->setFitMode(source->fitMode());
+    duplicate->setManualScale(source->manualScale());
+    duplicate->setFrameChromeVisible(source->frameChromeVisible());
+    duplicate->setDevToolsVisible(source->devToolsVisible());
+    addDevice(duplicate, true);
+    duplicate->start();
+    persist();
+    return duplicate;
+}
+
+AndroidDevice* DeviceManager::createAndroidDevice(const QString& requestedName,
+                                                  const QString& profileName,
+                                                  const QString& requestedAvdName,
+                                                  const QString& requestedSerial)
+{
+    if (!androidFeatureEnabled()) {
+        qWarning() << "Android runtime is locked because it is disabled by the build configuration";
+        return nullptr;
+    }
+
+    const auto name = requestedName.trimmed().isEmpty()
+        ? QStringLiteral("Android Device")
+        : requestedName.trimmed();
+    const auto avdName = requestedAvdName.trimmed();
+    const auto serial = requestedSerial.trimmed();
+    const auto profile = DeviceProfile::fromName(profileName);
+    auto* device = new AndroidDevice(
+        QUuid::createUuid().toString(QUuid::WithoutBraces), name, profile, avdName, serial, this);
     addDevice(device, true);
     device->start();
     persist();
@@ -147,6 +268,12 @@ void DeviceManager::removeDevice(const QString& id)
     }
 
     const auto row = m_model.indexOf(device);
+    if (auto* webDevice = qobject_cast<WebDevice*>(device); webDevice && webDevice->isStandalone()) {
+        returnToEmbedded(id);
+    }
+    if (auto* androidDevice = qobject_cast<AndroidDevice*>(device)) {
+        androidDevice->stop();
+    }
     const bool wasSelected = device == m_selectedDevice;
     if (wasSelected) {
         Device* replacement = nullptr;
@@ -169,9 +296,35 @@ void DeviceManager::selectDevice(const QString& id)
     setSelectedDevice(findById(id));
 }
 
+void DeviceManager::selectNextDevice()
+{
+    if (m_model.rowCount() == 0) {
+        return;
+    }
+    const auto current = m_model.indexOf(m_selectedDevice);
+    const auto next = current < 0 ? 0 : (current + 1) % m_model.rowCount();
+    setSelectedDevice(m_model.at(next));
+}
+
+void DeviceManager::selectPreviousDevice()
+{
+    if (m_model.rowCount() == 0) {
+        return;
+    }
+    const auto current = m_model.indexOf(m_selectedDevice);
+    const auto previous = current < 0
+        ? 0
+        : (current + m_model.rowCount() - 1) % m_model.rowCount();
+    setSelectedDevice(m_model.at(previous));
+}
+
 void DeviceManager::startDevice(const QString& id)
 {
     if (auto* device = findById(id)) {
+        if (qobject_cast<AndroidDevice*>(device) && !androidFeatureEnabled()) {
+            qWarning() << "Android runtime is locked; refusing to start";
+            return;
+        }
         device->start();
         persist();
     }
@@ -185,6 +338,58 @@ void DeviceManager::stopDevice(const QString& id)
     }
 }
 
+bool DeviceManager::reloadDevice(const QString& id, bool hardReload)
+{
+    auto* device = findById(id);
+    if (!device) {
+        return false;
+    }
+    if (auto* webDevice = qobject_cast<WebDevice*>(device)) {
+        if (hardReload) {
+            webDevice->hardReload();
+        } else {
+            webDevice->reload();
+        }
+        return true;
+    }
+    if (auto* androidDevice = qobject_cast<AndroidDevice*>(device)) {
+        return hardReload ? androidDevice->hardReload() : androidDevice->reload();
+    }
+    return false;
+}
+
+bool DeviceManager::reloadSelectedDevice(bool hardReload)
+{
+    return m_selectedDevice && reloadDevice(m_selectedDevice->id(), hardReload);
+}
+
+bool DeviceManager::openStandalone(const QString& id)
+{
+    auto* device = qobject_cast<WebDevice*>(findById(id));
+    if (!device || device->isStandalone()) {
+        return false;
+    }
+    device->setPresentationState(WebDevice::PresentationState::Standalone);
+    emit standaloneRequested(device);
+    return true;
+}
+
+void DeviceManager::returnToEmbedded(const QString& id)
+{
+    auto* device = qobject_cast<WebDevice*>(findById(id));
+    if (!device || !device->isStandalone()) {
+        return;
+    }
+    device->setPresentationState(WebDevice::PresentationState::Embedded);
+    emit embeddedRequested(device);
+}
+
+bool DeviceManager::isStandalone(const QString& id) const
+{
+    const auto* device = qobject_cast<const WebDevice*>(findById(id));
+    return device && device->isStandalone();
+}
+
 void DeviceManager::load()
 {
     if (!m_settings) {
@@ -192,18 +397,39 @@ void DeviceManager::load()
     }
 
     for (const auto& record : m_settings->loadDevices()) {
-        if (deviceTypeFromString(record.type) != DeviceType::Web) {
-            qWarning() << "Skipping unsupported persisted device type:" << record.type;
-            continue;
+        Device* device = nullptr;
+        if (deviceTypeFromString(record.type) == DeviceType::Android) {
+            auto* androidDevice = new AndroidDevice(record.id,
+                                                    record.name,
+                                                    DeviceProfile::fromName(record.profileName),
+                                                    record.avdName,
+                                                    record.adbSerial,
+                                                    this);
+            device = androidDevice;
+        } else {
+            const auto url = WebDevice::isValidUrl(record.url)
+                ? WebDevice::normalizeUrl(record.url)
+                : QStringLiteral("http://localhost:3000");
+            auto* webDevice = new WebDevice(record.id,
+                                            record.name,
+                                            DeviceProfile::fromName(record.profileName),
+                                            url,
+                                            this);
+            webDevice->setOrientation(record.orientation);
+            if (!record.userAgent.trimmed().isEmpty()) {
+                webDevice->setUserAgent(record.userAgent);
+            }
+            webDevice->setRecentUrls(record.recentUrls);
+            webDevice->setFitMode(record.fitMode);
+            webDevice->setManualScale(record.manualScale);
+            webDevice->setFrameChromeVisible(record.frameChromeVisible);
+            webDevice->setDevToolsVisible(record.devToolsVisible);
+            device = webDevice;
         }
-
-        auto* device = new WebDevice(record.id,
-                                     record.name,
-                                     DeviceProfile::fromName(record.profileName),
-                                     record.url,
-                                     this);
         addDevice(device, false);
-        device->start();
+        if (!qobject_cast<AndroidDevice*>(device) || androidFeatureEnabled()) {
+            device->start();
+        }
     }
 
     if (auto* saved = findById(m_settings->selectedDeviceId())) {
@@ -251,6 +477,17 @@ void DeviceManager::persist() const
         record.profileName = device->profileName();
         if (const auto* webDevice = qobject_cast<const WebDevice*>(device)) {
             record.url = webDevice->url();
+            record.orientation = webDevice->orientation().toLower();
+            record.userAgent = webDevice->userAgent();
+            record.recentUrls = webDevice->recentUrls();
+            record.fitMode = webDevice->fitMode();
+            record.manualScale = webDevice->manualScale();
+            record.frameChromeVisible = webDevice->frameChromeVisible();
+            record.devToolsVisible = webDevice->devToolsVisible();
+        }
+        if (const auto* androidDevice = qobject_cast<const AndroidDevice*>(device)) {
+            record.avdName = androidDevice->avdName();
+            record.adbSerial = androidDevice->adbSerial();
         }
         records.append(record);
     }

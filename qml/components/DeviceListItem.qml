@@ -8,10 +8,16 @@ Item {
     required property string deviceId
     required property string deviceName
     required property string deviceTypeLabel
+    required property string deviceType
     required property string deviceStatus
+    required property string devicePresentationState
+    required property string deviceRuntimeState
     property var manager
     property bool selected: false
     signal activated()
+    signal editRequested(string deviceId)
+    signal duplicateRequested(string deviceId)
+    signal removeRequested(string deviceId)
 
     implicitHeight: 76
     width: ListView.view ? ListView.view.width : 220
@@ -48,7 +54,9 @@ Item {
                 Layout.preferredWidth: 8
                 Layout.preferredHeight: 8
                 radius: 4
-                    color: root.deviceStatus === "Running" ? Theme.success : Theme.textFaint
+                    color: root.deviceRuntimeState === "Error" ? Theme.error
+                           : root.deviceRuntimeState === "Loading" ? Theme.warning
+                           : root.deviceStatus === "Running" ? Theme.success : Theme.textFaint
             }
 
             ColumnLayout {
@@ -77,32 +85,31 @@ Item {
 
                     Text {
                         Layout.fillWidth: true
-                        text: root.deviceStatus
-                        color: root.deviceStatus === "Running" ? Theme.success : Theme.textMuted
+                        text: root.devicePresentationState === "Standalone" ? "Standalone"
+                              : (root.deviceRuntimeState === "Loading" || root.deviceRuntimeState === "Error"
+                                 ? root.deviceRuntimeState : root.deviceStatus)
+                        color: root.deviceRuntimeState === "Error" ? Theme.error
+                               : root.deviceRuntimeState === "Loading" ? Theme.warning : Theme.textMuted
                         elide: Text.ElideMiddle
                         font.pixelSize: 11
                     }
                 }
             }
 
-            IconButton {
-                id: menuButton
-                Layout.alignment: Qt.AlignVCenter
-                Layout.preferredWidth: 28
-                Layout.preferredHeight: 28
-                iconText: "⋯"
-                tooltip: "Device menu"
-                visible: root.selected || rowMouseArea.containsMouse
-                onClicked: deviceMenu.openFor(menuButton)
-            }
         }
 
         MouseArea {
             id: rowMouseArea
             anchors.fill: parent
             hoverEnabled: true
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
             cursorShape: Qt.PointingHandCursor
-            onClicked: root.activated()
+            onClicked: function(mouse) {
+                if (mouse.button === Qt.RightButton)
+                    deviceMenu.openAt(rowMouseArea, mouse.x, mouse.y)
+                else
+                    root.activated()
+            }
         }
     }
 
@@ -111,6 +118,11 @@ Item {
         manager: root.manager
         deviceId: root.deviceId
         deviceName: root.deviceName
+        deviceType: root.deviceType
         deviceStatus: root.deviceStatus
+        devicePresentationState: root.devicePresentationState
+        onEditRequested: root.editRequested(root.deviceId)
+        onDuplicateRequested: root.duplicateRequested(root.deviceId)
+        onRemoveRequested: root.removeRequested(root.deviceId)
     }
 }

@@ -16,8 +16,149 @@ ApplicationWindow {
     color: Theme.window
     flags: Qt.Window | Qt.FramelessWindowHint
     title: "Hesh"
+    property var standaloneWindows: ({})
+    property bool shortcutSettingsOpen: false
+    property string pendingRemoveId: ""
+    property string pendingRemoveName: ""
 
     property bool maximized: false
+
+    function openShortcutSettings() {
+        window.shortcutSettingsOpen = true
+        window.show()
+        window.raise()
+        window.requestActivate()
+    }
+
+    function hideToTray() {
+        heshApplication.hideToTray()
+        window.hide()
+    }
+
+    function openEditDevice(id) {
+        const device = deviceManager.deviceById(id)
+        if (device)
+            editDeviceDialog.openFor(device, false)
+    }
+
+    function openDuplicateDevice(id) {
+        const device = deviceManager.webDevice(id)
+        if (device)
+            editDeviceDialog.openFor(device, true)
+    }
+
+    function requestRemoveDevice(id) {
+        const device = deviceManager.deviceById(id)
+        if (!device)
+            return
+        window.pendingRemoveId = id
+        window.pendingRemoveName = device.name
+        removeDeviceDialog.open()
+    }
+
+    function dispatchShortcut(actionId, targetDeviceId) {
+        const target = targetDeviceId.length > 0 ? targetDeviceId
+                                                  : (deviceManager.selectedDevice
+                                                     ? deviceManager.selectedDevice.id : "")
+        switch (actionId) {
+        case "window.hide":
+            window.hideToTray()
+            break
+        case "window.show":
+            window.show()
+            window.raise()
+            window.requestActivate()
+            break
+        case "window.minimize":
+            window.showMinimized()
+            break
+        case "window.maximize":
+            window.toggleMaximize()
+            break
+        case "window.close":
+            Qt.quit()
+            break
+        case "app.quit":
+            Qt.quit()
+            break
+        case "device.new":
+            createDeviceDialog.open()
+            break
+        case "device.settings":
+            window.openShortcutSettings()
+            break
+        case "device.selectNext":
+            deviceManager.selectNextDevice()
+            break
+        case "device.selectPrevious":
+            deviceManager.selectPreviousDevice()
+            break
+        case "device.start":
+            if (target.length > 0)
+                deviceManager.startDevice(target)
+            break
+        case "device.stop":
+            if (target.length > 0)
+                deviceManager.stopDevice(target)
+            break
+        case "device.reload":
+            workspace.reloadDevice(false)
+            break
+        case "device.hardReload":
+            workspace.reloadDevice(true)
+            break
+        case "device.rotate":
+            workspace.rotateDevice()
+            break
+        case "device.openStandalone":
+            workspace.toggleStandalone()
+            break
+        case "web.back":
+            if (workspace.deviceFrame)
+                workspace.deviceFrame.goBack()
+            break
+        case "web.forward":
+            if (workspace.deviceFrame)
+                workspace.deviceFrame.goForward()
+            break
+        case "web.focusUrl":
+            workspace.focusUrl()
+            break
+        case "web.devTools":
+            workspace.toggleDevTools()
+            break
+        case "view.fit":
+            workspace.setShortcutScale("Fit")
+            break
+        case "view.scale25":
+            workspace.setShortcutScale("25%")
+            break
+        case "view.scale50":
+            workspace.setShortcutScale("50%")
+            break
+        case "view.scale75":
+            workspace.setShortcutScale("75%")
+            break
+        case "view.scale100":
+            workspace.setShortcutScale("100%")
+            break
+        case "view.scale125":
+            workspace.setShortcutScale("125%")
+            break
+        case "android.home":
+            if (workspace.isAndroid && workspace.device)
+                workspace.device.sendHome()
+            break
+        case "android.back":
+            if (workspace.isAndroid && workspace.device)
+                workspace.device.sendBack()
+            break
+        case "android.recents":
+            if (workspace.isAndroid && workspace.device)
+                workspace.device.sendRecents()
+            break
+        }
+    }
     function toggleMaximize() {
         if (maximized) {
             showNormal()
@@ -28,11 +169,117 @@ ApplicationWindow {
         }
     }
 
+    function createStandaloneWindow(device) {
+        if (!device || standaloneWindows[device.id])
+            return
+
+        const created = standaloneWindowComponent.createObject(null, {
+            "device": device,
+            "manager": deviceManager
+        })
+        if (!created) {
+            deviceManager.returnToEmbedded(device.id)
+            return
+        }
+        standaloneWindows[device.id] = created
+    }
+
+    function destroyStandaloneWindow(device) {
+        if (!device)
+            return
+        const existing = standaloneWindows[device.id]
+        if (!existing)
+            return
+        delete standaloneWindows[device.id]
+        existing.destroy()
+    }
+
+    function closeStandaloneWindows() {
+        const ids = Object.keys(standaloneWindows)
+        for (let index = 0; index < ids.length; ++index) {
+            const existing = standaloneWindows[ids[index]]
+            if (existing)
+                existing.close()
+        }
+    }
+
     Component.onCompleted: {
         if (Qt.application.arguments.indexOf("--maximized") >= 0) {
             showMaximized()
             maximized = true
         }
+    }
+
+    onClosing: window.closeStandaloneWindows()
+
+    Connections {
+        target: deviceManager
+
+        function onStandaloneRequested(device) {
+            window.createStandaloneWindow(device)
+        }
+
+        function onEmbeddedRequested(device) {
+            window.destroyStandaloneWindow(device)
+        }
+    }
+
+    Connections {
+        target: heshApplication
+
+        function onHideRequested() {
+            window.hide()
+        }
+
+        function onShowRequested() {
+            window.show()
+            window.raise()
+            window.requestActivate()
+        }
+
+        function onShortcutSettingsRequested() {
+            window.openShortcutSettings()
+        }
+
+        function onNewDeviceRequested() {
+            window.show()
+            window.raise()
+            window.requestActivate()
+            createDeviceDialog.open()
+        }
+    }
+
+    Connections {
+        target: shortcutManager
+
+        function onActionTriggered(actionId, targetDeviceId, origin) {
+            if (origin === "main")
+                window.dispatchShortcut(actionId, targetDeviceId)
+        }
+    }
+
+    Repeater {
+        model: shortcutManager
+
+        delegate: Item {
+            id: shortcutDelegate
+            required property string actionId
+            required property string sequence
+            property string targetDeviceId: deviceManager.selectedDevice
+                                             ? deviceManager.selectedDevice.id : ""
+
+            Shortcut {
+                sequence: shortcutDelegate.sequence
+                enabled: window.visible && !window.shortcutSettingsOpen
+                context: Qt.WindowShortcut
+                onActivated: shortcutManager.trigger(actionId, targetDeviceId, "main")
+            }
+        }
+    }
+
+    Component {
+        id: standaloneWindowComponent
+        StandaloneDeviceWindow {}
     }
 
     Rectangle {
@@ -100,8 +347,7 @@ ApplicationWindow {
                         text: "Settings"
                         compact: true
                         secondary: true
-                        enabled: false
-                        ToolTip.visible: false
+                        onClicked: window.openShortcutSettings()
                     }
 
                     Rectangle {
@@ -149,6 +395,9 @@ ApplicationWindow {
                     Layout.preferredWidth: 252
                     manager: deviceManager
                     onAddDeviceRequested: createDeviceDialog.open()
+                    onEditDeviceRequested: window.openEditDevice(deviceId)
+                    onDuplicateDeviceRequested: window.openDuplicateDevice(deviceId)
+                    onRemoveDeviceRequested: window.requestRemoveDevice(deviceId)
                 }
 
                 Rectangle {
@@ -163,10 +412,14 @@ ApplicationWindow {
                     }
 
                     DeviceWorkspace {
+                        id: workspace
                         anchors.fill: parent
                         visible: deviceManager.deviceCount > 0
                         manager: deviceManager
                         device: deviceManager.selectedDevice
+                        onEditDeviceRequested: window.openEditDevice(deviceId)
+                        onDuplicateDeviceRequested: window.openDuplicateDevice(deviceId)
+                        onRemoveDeviceRequested: window.requestRemoveDevice(deviceId)
                     }
                 }
             }
@@ -184,7 +437,11 @@ ApplicationWindow {
                     anchors.rightMargin: 18
 
                     Text {
-                        text: deviceManager.deviceCount > 0 ? "Hesh  •  Web device ready" : "Hesh  •  Ready to create a device"
+                        text: deviceManager.deviceCount > 0
+                              ? (deviceManager.selectedDevice && deviceManager.selectedDevice.type === "android"
+                                 ? "Hesh  •  Android runtime"
+                                 : "Hesh  •  Web runtime ready")
+                              : "Hesh  •  Ready to create a device"
                         color: Theme.textFaint
                         font.pixelSize: 10
                     }
@@ -192,13 +449,13 @@ ApplicationWindow {
                     Item { Layout.fillWidth: true }
 
                     Text {
-                        text: "Phase 1"
+                        text: "Phase 2"
                         color: Theme.textFaint
                         font.pixelSize: 10
                     }
 
                     Text {
-                        text: "DevTools  ↗"
+                        text: "Native device windows  ↗"
                         color: Theme.textMuted
                         font.pixelSize: 10
                         font.weight: Font.Medium
@@ -211,5 +468,56 @@ ApplicationWindow {
     CreateDeviceDialog {
         id: createDeviceDialog
         manager: deviceManager
+    }
+
+    EditDeviceDialog {
+        id: editDeviceDialog
+        manager: deviceManager
+    }
+
+    Dialog {
+        id: removeDeviceDialog
+        anchors.centerIn: Overlay.overlay
+        width: Overlay.overlay ? Math.min(420, Overlay.overlay.width - 32) : 420
+        modal: true
+        title: "Remove device?"
+        standardButtons: Dialog.Cancel | Dialog.Ok
+
+        contentItem: ColumnLayout {
+            spacing: 8
+
+            Text {
+                Layout.fillWidth: true
+                text: "Remove “" + window.pendingRemoveName
+                      + "”? Its saved configuration will be deleted."
+                color: Theme.text
+                wrapMode: Text.WordWrap
+                font.pixelSize: 12
+            }
+
+            Text {
+                Layout.fillWidth: true
+                text: "The browser profile directory is kept on disk so recovery tools can inspect it later."
+                color: Theme.textMuted
+                wrapMode: Text.WordWrap
+                font.pixelSize: 10
+            }
+        }
+
+        onAccepted: {
+            if (window.pendingRemoveId.length > 0)
+                deviceManager.removeDevice(window.pendingRemoveId)
+            window.pendingRemoveId = ""
+            window.pendingRemoveName = ""
+        }
+    }
+
+    ShortcutSettings {
+        id: shortcutSettings
+        anchors.fill: shell
+        visible: window.shortcutSettingsOpen
+        z: 20
+        shortcutManager: heshApplication.shortcutManager
+        onCloseRequested: window.shortcutSettingsOpen = false
     }
 }

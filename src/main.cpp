@@ -1,4 +1,4 @@
-#include <QGuiApplication>
+#include <QApplication>
 #include <QDebug>
 #include <QIcon>
 #include <QQmlApplicationEngine>
@@ -11,6 +11,8 @@
 #include <QtWebEngineQuick/QtWebEngineQuick>
 
 #include "app/Application.hpp"
+#include "android/AndroidDevice.hpp"
+#include "android/AndroidRuntime.hpp"
 #include "devices/Device.hpp"
 #include "web/WebDevice.hpp"
 
@@ -18,8 +20,9 @@ int main(int argc, char* argv[])
 {
     QtWebEngineQuick::initialize();
 
-    QGuiApplication app(argc, argv);
+    QApplication app(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("Hesh"));
+    QCoreApplication::setApplicationVersion(QStringLiteral(HESH_VERSION));
     QCoreApplication::setOrganizationName(QStringLiteral("Hesh"));
     QGuiApplication::setApplicationDisplayName(QStringLiteral("Hesh"));
     QGuiApplication::setWindowIcon(QIcon(QStringLiteral(":/qt/qml/Hesh/assets/icons/hesh.png")));
@@ -28,10 +31,21 @@ int main(int argc, char* argv[])
                                               QStringLiteral("Devices are created by DeviceManager"));
     qmlRegisterUncreatableType<Hesh::WebDevice>("Hesh", 1, 0, "WebDevice",
                                                  QStringLiteral("Web devices are created by DeviceManager"));
+    qmlRegisterUncreatableType<Hesh::AndroidDevice>("Hesh", 1, 0, "AndroidDevice",
+                                                    QStringLiteral("Android devices are created by DeviceManager"));
+    qmlRegisterUncreatableType<Hesh::AndroidRuntime>("Hesh", 1, 0, "AndroidRuntime",
+                                                    QStringLiteral("Android runtimes are created by AndroidDevice"));
 
     Hesh::Application hesh;
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty(QStringLiteral("deviceManager"), hesh.deviceManager());
+    engine.rootContext()->setContextProperty(QStringLiteral("heshApplication"), &hesh);
+    engine.rootContext()->setContextProperty(QStringLiteral("shortcutManager"), hesh.shortcutManager());
+
+    QObject::connect(&hesh,
+                     &Hesh::Application::quitRequested,
+                     &app,
+                     &QCoreApplication::quit);
 
     QObject::connect(&engine,
                      &QQmlApplicationEngine::warnings,

@@ -19,7 +19,7 @@ class Device : public QObject
     Q_PROPERTY(int viewportWidth READ viewportWidth NOTIFY profileChanged)
     Q_PROPERTY(int viewportHeight READ viewportHeight NOTIFY profileChanged)
     Q_PROPERTY(double devicePixelRatio READ devicePixelRatio NOTIFY profileChanged)
-    Q_PROPERTY(QString userAgent READ userAgent NOTIFY profileChanged)
+    Q_PROPERTY(QString userAgent READ userAgent WRITE setUserAgent NOTIFY profileChanged)
 
 public:
     enum class Status {
@@ -55,8 +55,9 @@ public:
     int viewportWidth() const;
     int viewportHeight() const;
     double devicePixelRatio() const;
-    QString userAgent() const;
-    void setProfile(const DeviceProfile& profile);
+    virtual QString userAgent() const;
+    virtual void setUserAgent(const QString& userAgent);
+    virtual void setProfile(const DeviceProfile& profile);
 
     virtual void start();
     virtual void stop();

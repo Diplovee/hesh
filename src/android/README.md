@@ -1,21 +1,37 @@
-# Android backend (planned)
+# Android backend
 
-Android support is intentionally not implemented in Phase 1. No QEMU, KVM,
-ADB, APK, image, or snapshot code belongs in this directory yet.
+Hesh can launch an existing Android SDK AVD and manage its lifecycle. The
+backend does not bundle Android system images; those remain installed and
+licensed through the Android SDK.
 
-The future backend should introduce an `AndroidDevice` implementation of the
-base `Device` contract. Its runtime boundary is expected to look like:
+The runtime boundary is:
 
 ```text
 AndroidDevice
     ↓
 AndroidRuntime
     ↓
-QEMU
+Android SDK emulator
     ↓
-KVM
+QEMU/KVM
 ```
 
-The runtime will own process lifecycle, image selection, CPU/RAM/storage
-configuration, ADB connectivity, and snapshots. `DeviceManager` should remain
-agnostic to those details.
+`AndroidRuntime` owns emulator process lifecycle, boot polling through ADB,
+scrcpy display startup when available, Android key events, rotation, and APK
+installation. `AndroidDevice` exposes that runtime through the common `Device`
+contract while `DeviceManager` remains responsible for collection ownership and
+persistence.
+
+## Local prerequisites
+
+- Android SDK platform-tools (`adb`)
+- Android SDK emulator package (`emulator`)
+- At least one existing AVD
+- `scrcpy` for an interactive mirrored display; without it, the emulator's own
+  window is used instead
+
+The backend searches `PATH`, `ANDROID_HOME`, `ANDROID_SDK_ROOT`,
+`~/Android/Sdk`, and `~/.android/sdk`.
+
+For the complete Omarchy/Arch installation and verification steps, see
+[`docs/ANDROID_SETUP.md`](../../docs/ANDROID_SETUP.md).
