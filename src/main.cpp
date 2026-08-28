@@ -22,7 +22,6 @@ int main(int argc, char* argv[])
     const QList<QByteArray> requiredChromiumFlags {
         "--force-dark-mode",
         "--enable-features=WebUIDarkMode",
-        "--disable-gpu",
     };
     for (const auto& flag : requiredChromiumFlags) {
         if (!chromiumFlags.contains(flag)) {

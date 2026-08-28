@@ -1,6 +1,7 @@
 # Android backend (planned)
 
-Android support is intentionally not implemented in Phase 1. No QEMU, KVM,
+As of Hesh **0.1.1**, Android support is intentionally not implemented in
+Phase 1. No QEMU, KVM,
 ADB, APK, image, or snapshot code belongs in this directory yet.
 
 The future backend should introduce an `AndroidDevice` implementation of the

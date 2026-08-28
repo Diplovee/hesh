@@ -22,6 +22,13 @@ Item {
     property bool devToolsThemeApplied: false
     property int devToolsThemeAttempts: 0
 
+    function localPath(location) {
+        // StandardPaths returns a URL in QML, while WebEngineProfile expects a
+        // native filesystem path. Passing the URL verbatim creates a literal
+        // "file:" directory relative to the process working directory.
+        return decodeURIComponent(location.toString().replace(/^file:\/\//, ""))
+    }
+
     function applyDevToolsDarkTheme() {
         if (!root.showDevTools || root.devToolsThemeApplied
                 || devToolsView.loading || devToolsView.url.toString() === "") {
@@ -103,11 +110,11 @@ Item {
         id: deviceProfile
         storageName: root.device ? "hesh-device-" + root.device.id : "hesh-device-preview"
         persistentStoragePath: root.device
-            ? StandardPaths.writableLocation(StandardPaths.AppDataLocation)
+            ? root.localPath(StandardPaths.writableLocation(StandardPaths.AppDataLocation))
               + "/web-devices/" + root.device.id
             : ""
         cachePath: root.device
-            ? StandardPaths.writableLocation(StandardPaths.CacheLocation)
+            ? root.localPath(StandardPaths.writableLocation(StandardPaths.CacheLocation))
               + "/web-devices/" + root.device.id
             : ""
         httpCacheType: WebEngineProfile.DiskHttpCache
@@ -212,11 +219,29 @@ Item {
                 settings.fullScreenSupportEnabled: false
                 settings.javascriptEnabled: true
                 settings.localContentCanAccessRemoteUrls: true
+                onLoadProgressChanged: {
+                    // loadingChanged can arrive late for development servers.
+                    // Reveal the page as soon as Chromium has rendered it.
+                    if (loadProgress >= 100) {
+                        root.pageLoading = false
+                        root.pageLoaded = true
+                        root.pageFailed = false
+                    }
+                }
                 onLoadingChanged: function(loadRequest) {
-                    root.pageLoading = loadRequest.status === WebEngineView.LoadStartedStatus
-                    root.pageLoaded = loadRequest.status === WebEngineView.LoadSucceededStatus
-                    root.pageFailed = loadRequest.status === WebEngineView.LoadFailedStatus
-                    if (loadRequest.status === WebEngineView.LoadFailedStatus) {
+                    if (loadRequest.status === WebEngineView.LoadStartedStatus) {
+                        root.pageLoading = true
+                        root.pageLoaded = false
+                        root.pageFailed = false
+                        root.pageError = ""
+                    } else if (loadRequest.status === WebEngineView.LoadSucceededStatus) {
+                        root.pageLoading = false
+                        root.pageLoaded = true
+                        root.pageFailed = false
+                    } else if (loadRequest.status === WebEngineView.LoadFailedStatus) {
+                        root.pageLoading = false
+                        root.pageLoaded = false
+                        root.pageFailed = true
                         root.pageError = loadRequest.errorString || "Check that the URL is running."
                         console.info("Hesh WebDevice could not load", loadRequest.url, loadRequest.errorString)
                     }

@@ -1,5 +1,7 @@
 # Hesh
 
+Current version: **0.1.1**
+
 Hesh is a lightweight Linux desktop environment for developing and testing
 web devices, with a future path to real Android virtual devices. It is a
 native Qt 6 application: QML owns presentation while modern C++ owns
@@ -15,15 +17,18 @@ Implemented:
 - Web devices with built-in viewport profiles
 - Create-device flow with an explicit Android “Coming later” state
 - Embedded Qt WebEngine web-device preview
+- Embedded Chromium DevTools with a persistent dark appearance
 - Logical viewport sizing kept separate from visual workspace scaling
 - QSettings-backed persistence for devices and selected device
+- Isolated, persistent cookies, local storage, IndexedDB, and disk cache per web device
+- Hardware-accelerated preview rendering with responsive loading and error states
 - Core Qt Test coverage for creation, removal, selection, profiles, and persistence
 
 Not implemented yet:
 
 - Android devices, QEMU, KVM, ADB, APK installation, images, or snapshots
 - Standalone native device windows
-- Browser toolbar and full developer tools integration
+- Full browser navigation toolbar and advanced developer-tool hosting controls
 - Project-local configuration or remote device management
 
 ## Requirements
@@ -60,6 +65,10 @@ ctest --test-dir build --output-on-failure
 
 The executable is `build/hesh` with the current CMake configuration.
 
+Web-device metadata is stored through `QSettings`. Browser state is isolated by
+device id under the platform application-data and cache directories; generated
+Chromium data is never written into the source tree.
+
 On a Wayland compositor such as Hyprland, the application uses a frameless
 Qt Quick window and calls the compositor's system move operation for titlebar
 dragging. XWayland remains available through Qt's normal platform handling.
@@ -86,9 +95,9 @@ boundary.
 
 ### Phase 2 — Web Device Runtime + standalone windows
 
-Prove the browser runtime boundary further, add robust loading/error states,
-host controls, and allow a device to be presented in its own native window
-without changing `DeviceManager`.
+Prove the browser runtime boundary further, add navigation and host controls,
+and allow a device to be presented in its own native window without changing
+`DeviceManager`.
 
 ### Phase 3 — QEMU/KVM Android runtime prototype
 

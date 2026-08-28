@@ -1,5 +1,7 @@
 # Hesh architecture
 
+This document describes Hesh **0.1.1**.
+
 Hesh keeps the QML presentation layer separate from the C++ application and
 device infrastructure.
 
@@ -27,6 +29,14 @@ device list as compact JSON in one settings value, plus the selected device id.
 This keeps persistence out of QML and leaves room for a database or project
 file later.
 
+Browser persistence is separate from device metadata. Each web device receives
+an isolated `WebEngineProfile` keyed by its stable device id. Cookies, local
+storage, IndexedDB, and other browser data use the platform application-data
+directory, while disposable HTTP and rendering caches use the platform cache
+directory. QML converts `StandardPaths` URLs to native filesystem paths before
+passing them to WebEngine; passing a `file://` URL to those string properties
+would incorrectly create a relative `file:` directory.
+
 ## Device model
 
 `Device` contains identity, type, lifecycle status, and display profile data.
@@ -49,6 +59,18 @@ The web content's logical viewport is kept separate from its visual scale.
 then scales the containing frame down to fit the workspace. Scaling the QML
 item therefore changes presentation size without changing the website's CSS
 viewport.
+
+The preview runs with WebEngine's normal hardware-accelerated backend. Loading
+state is driven by both navigation status and load progress so a rendered page
+is revealed promptly, including development servers whose final navigation
+notification can arrive late.
+
+## Developer tools
+
+`DeviceFrame` hosts Chromium DevTools in a second `WebEngineView` whose
+`inspectedView` is the device preview. DevTools has its own preference store,
+so Hesh selects its native `uiTheme` setting after the frontend initializes
+rather than applying a content color inversion filter.
 
 ## Presentation boundary
 
