@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Shapes
+import QtCore
 import QtWebEngine
 import Hesh 1.0
 
@@ -15,8 +16,59 @@ Item {
     property bool pageLoading: false
     property bool pageFailed: false
     property string pageError: ""
+    property bool profileReady: false
     property bool showDevTools: false
     property int devToolsWidth: 420
+    property bool devToolsThemeApplied: false
+    property int devToolsThemeAttempts: 0
+
+    function applyDevToolsDarkTheme() {
+        if (!root.showDevTools || root.devToolsThemeApplied
+                || devToolsView.loading || devToolsView.url.toString() === "") {
+            return
+        }
+
+        // DevTools has its own preference store. Chromium's process theme and
+        // WebEngineSettings.forceDarkMode do not reliably select this setting.
+        devToolsView.runJavaScript(
+            "(() => {" +
+            "  try {" +
+            "    const settings = globalThis.Common?.settings ?? " +
+            "      globalThis.Common?.Settings?.Settings?.instance?.();" +
+            "    if (!settings) return false;" +
+            "    let theme;" +
+            "    try { theme = settings.moduleSetting('uiTheme'); } catch (_) {}" +
+            "    theme ||= settings.createSetting('uiTheme', 'systemPreferred');" +
+            "    if (theme.get() !== 'dark') theme.set('dark');" +
+            "    return theme.get() === 'dark';" +
+            "  } catch (_) { return false; }" +
+            "})()",
+            function(applied) {
+                root.devToolsThemeApplied = applied === true
+            })
+    }
+
+    onShowDevToolsChanged: {
+        if (root.showDevTools) {
+            root.devToolsThemeApplied = false
+            root.devToolsThemeAttempts = 0
+            devToolsThemeTimer.restart()
+        } else {
+            devToolsThemeTimer.stop()
+        }
+    }
+
+    Timer {
+        id: devToolsThemeTimer
+        interval: 150
+        repeat: true
+        running: root.showDevTools && !root.devToolsThemeApplied
+        onTriggered: {
+            root.devToolsThemeAttempts++
+            root.applyDevToolsDarkTheme()
+            if (root.devToolsThemeApplied || root.devToolsThemeAttempts >= 40) stop()
+        }
+    }
 
     // The content item remains the logical viewport. Only the outer frame is scaled.
     property real presentationScale: root.device
@@ -43,6 +95,30 @@ Item {
         root.pageLoading = false
         root.pageFailed = false
         root.pageError = ""
+    }
+
+    // Every device gets its own browser profile. This keeps localStorage,
+    // IndexedDB, cookies and cache isolated and available after a reload.
+    WebEngineProfilePrototype {
+        id: deviceProfile
+        storageName: root.device ? "hesh-device-" + root.device.id : "hesh-device-preview"
+        persistentStoragePath: root.device
+            ? StandardPaths.writableLocation(StandardPaths.AppDataLocation)
+              + "/web-devices/" + root.device.id
+            : ""
+        cachePath: root.device
+            ? StandardPaths.writableLocation(StandardPaths.CacheLocation)
+              + "/web-devices/" + root.device.id
+            : ""
+        httpCacheType: WebEngineProfile.DiskHttpCache
+        persistentCookiesPolicy: WebEngineProfile.ForcePersistentCookies
+    }
+
+    Component.onCompleted: {
+        // Assign after construction; assigning instance() through a binding
+        // during WebEngineView creation can crash Qt WebEngine on Wayland.
+        webView.profile = deviceProfile.instance()
+        root.profileReady = true
     }
 
     Rectangle {
@@ -130,7 +206,8 @@ Item {
                 id: webView
                 anchors.fill: parent
                 z: 0
-                url: root.device && root.device.status === "Running" ? root.device.url : "about:blank"
+                url: root.profileReady && root.device && root.device.status === "Running"
+                     ? root.device.url : "about:blank"
                 backgroundColor: "#0d1014"
                 settings.fullScreenSupportEnabled: false
                 settings.javascriptEnabled: true
@@ -294,6 +371,15 @@ Item {
             anchors.bottom: parent.bottom
             inspectedView: webView
             backgroundColor: Theme.panelRaised
+            onLoadingChanged: function(loadRequest) {
+                if (loadRequest.status === WebEngineView.LoadStartedStatus) {
+                    root.devToolsThemeApplied = false
+                    root.devToolsThemeAttempts = 0
+                } else if (loadRequest.status === WebEngineView.LoadSucceededStatus) {
+                    devToolsThemeTimer.restart()
+                    root.applyDevToolsDarkTheme()
+                }
+            }
         }
     }
 }

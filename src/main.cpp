@@ -16,6 +16,23 @@
 
 int main(int argc, char* argv[])
 {
+    // Keep the embedded page and Chromium DevTools in dark mode by default.
+    // Preserve flags supplied by the user or launcher.
+    auto chromiumFlags = qgetenv("QTWEBENGINE_CHROMIUM_FLAGS");
+    const QList<QByteArray> requiredChromiumFlags {
+        "--force-dark-mode",
+        "--enable-features=WebUIDarkMode",
+        "--disable-gpu",
+    };
+    for (const auto& flag : requiredChromiumFlags) {
+        if (!chromiumFlags.contains(flag)) {
+            if (!chromiumFlags.isEmpty()) {
+                chromiumFlags.append(' ');
+            }
+            chromiumFlags.append(flag);
+        }
+    }
+    qputenv("QTWEBENGINE_CHROMIUM_FLAGS", chromiumFlags);
     QtWebEngineQuick::initialize();
 
     QGuiApplication app(argc, argv);

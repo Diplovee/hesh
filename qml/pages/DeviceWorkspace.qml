@@ -33,17 +33,25 @@ Item {
                 }
             }
 
-            DeviceFrame {
-                id: deviceFrame
+            Loader {
+                id: deviceLoader
                 anchors.centerIn: parent
-                device: root.device
-                availableWidth: stage.width
-                availableHeight: stage.height
-                visible: root.device !== null
-                showDevTools: root.showDevTools
+                active: root.device !== null
+                sourceComponent: deviceFrameComponent
 
-                Behavior on presentationScale {
-                    NumberAnimation { duration: 160; easing.type: Easing.OutCubic }
+                Component {
+                    id: deviceFrameComponent
+
+                    DeviceFrame {
+                        device: root.device
+                        availableWidth: stage.width
+                        availableHeight: stage.height
+                        showDevTools: root.showDevTools
+
+                        Behavior on presentationScale {
+                            NumberAnimation { duration: 160; easing.type: Easing.OutCubic }
+                        }
+                    }
                 }
             }
         }
@@ -118,14 +126,14 @@ Item {
 
                 Text {
                     visible: !root.compact
-                    text: deviceFrame.presentationMode
+                    text: deviceLoader.item ? deviceLoader.item.presentationMode : "Fit"
                     color: Theme.textMuted
                     font.pixelSize: 11
                 }
 
                 Text {
                     visible: !root.compact
-                    text: deviceFrame.presentationPercent + "%"
+                    text: deviceLoader.item ? deviceLoader.item.presentationPercent + "%" : ""
                     color: Theme.accent
                     font.pixelSize: 11
                     font.weight: Font.DemiBold
