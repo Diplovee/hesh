@@ -105,30 +105,6 @@ ApplicationWindow {
                         visible: !window.compactWindow
                     }
 
-                    Rectangle {
-                        Layout.preferredWidth: 1
-                        Layout.preferredHeight: 22
-                        color: Theme.border
-                    }
-
-                    IconButton {
-                        iconText: "—"
-                        tooltip: "Minimize"
-                        onClicked: window.showMinimized()
-                    }
-
-                    IconButton {
-                        iconText: window.maximized ? "❐" : "□"
-                        tooltip: window.maximized ? "Restore" : "Maximize"
-                        onClicked: window.toggleMaximize()
-                    }
-
-                    IconButton {
-                        iconText: "×"
-                        tooltip: "Close"
-                        onClicked: Qt.quit()
-                    }
-
                 }
 
                 MouseArea {

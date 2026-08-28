@@ -85,24 +85,20 @@ Item {
                 }
             }
 
-            IconButton {
-                id: menuButton
-                Layout.alignment: Qt.AlignVCenter
-                Layout.preferredWidth: 28
-                Layout.preferredHeight: 28
-                iconText: "⋯"
-                tooltip: "Device menu"
-                visible: root.selected || rowMouseArea.containsMouse
-                onClicked: deviceMenu.openFor(menuButton)
-            }
         }
 
         MouseArea {
             id: rowMouseArea
             anchors.fill: parent
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
-            onClicked: root.activated()
+            onClicked: function(mouse) {
+                root.activated()
+                if (mouse.button === Qt.RightButton) {
+                    deviceMenu.openAt(root, mouse.x, mouse.y)
+                }
+            }
         }
     }
 

@@ -25,8 +25,8 @@ Popup {
         radius: Theme.radiusSmall
     }
 
-    function openFor(anchor) {
-        const point = anchor.mapToItem(Overlay.overlay, 0, anchor.height + 5)
+    function openAt(anchor, localX, localY) {
+        const point = anchor.mapToItem(Overlay.overlay, localX, localY)
         x = Math.max(10, Math.min(point.x, Overlay.overlay.width - width - 10))
         y = Math.max(10, Math.min(point.y, Overlay.overlay.height - height - 10))
         open()
@@ -36,19 +36,20 @@ Popup {
         if (!root.manager || root.deviceId.length === 0) {
             return
         }
+        close()
         if (root.deviceStatus === "Running") {
             root.manager.stopDevice(root.deviceId)
         } else {
             root.manager.startDevice(root.deviceId)
         }
-        close()
     }
 
     function removeDevice() {
-        if (root.manager && root.deviceId.length > 0) {
-            root.manager.removeDevice(root.deviceId)
+        if (!root.manager || root.deviceId.length === 0) {
+            return
         }
         close()
+        root.manager.removeDevice(root.deviceId)
     }
 
     contentItem: ColumnLayout {
