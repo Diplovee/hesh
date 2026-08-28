@@ -20,12 +20,34 @@ Item {
             border.width: 1
             border.color: "#454a75"
 
-            Text {
+            Rectangle {
+                width: 25
+                height: 40
                 anchors.centerIn: parent
-                text: "◇"
-                color: Theme.accent
-                font.pixelSize: 30
-                font.weight: Font.Light
+                radius: 5
+                color: "transparent"
+                border.width: 2
+                border.color: Theme.accent
+
+                Rectangle {
+                    anchors.top: parent.top
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.topMargin: 4
+                    width: 8
+                    height: 2
+                    radius: 1
+                    color: Theme.accent
+                }
+
+                Rectangle {
+                    anchors.bottom: parent.bottom
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.bottomMargin: 4
+                    width: 4
+                    height: 4
+                    radius: 2
+                    color: Theme.accent
+                }
             }
         }
 

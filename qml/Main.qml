@@ -11,13 +11,14 @@ ApplicationWindow {
     visible: true
     width: 1240
     height: 780
-    minimumWidth: 900
-    minimumHeight: 580
+    minimumWidth: 360
+    minimumHeight: 520
     color: Theme.window
     flags: Qt.Window | Qt.FramelessWindowHint
     title: "Hesh"
 
     property bool maximized: false
+    readonly property bool compactWindow: width < 760
     function toggleMaximize() {
         if (maximized) {
             showNormal()
@@ -86,12 +87,13 @@ ApplicationWindow {
                         font.pixelSize: 9
                         font.weight: Font.DemiBold
                         font.letterSpacing: 1.0
+                        visible: !window.compactWindow
                     }
 
                     Item { Layout.fillWidth: true }
 
                     AppButton {
-                        text: "+  New Device"
+                        text: window.compactWindow ? "+  New" : "+  New Device"
                         compact: true
                         onClicked: createDeviceDialog.open()
                     }
@@ -100,8 +102,7 @@ ApplicationWindow {
                         text: "Settings"
                         compact: true
                         secondary: true
-                        enabled: false
-                        ToolTip.visible: false
+                        visible: !window.compactWindow
                     }
 
                     Rectangle {
@@ -127,6 +128,7 @@ ApplicationWindow {
                         tooltip: "Close"
                         onClicked: Qt.quit()
                     }
+
                 }
 
                 MouseArea {
@@ -147,6 +149,7 @@ ApplicationWindow {
                     id: sidebar
                     Layout.fillHeight: true
                     Layout.preferredWidth: 252
+                    visible: !window.compactWindow
                     manager: deviceManager
                     onAddDeviceRequested: createDeviceDialog.open()
                 }
@@ -171,40 +174,6 @@ ApplicationWindow {
                 }
             }
 
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 30
-                color: Theme.panel
-                border.width: 1
-                border.color: Theme.border
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: 22
-                    anchors.rightMargin: 18
-
-                    Text {
-                        text: deviceManager.deviceCount > 0 ? "Hesh  •  Web device ready" : "Hesh  •  Ready to create a device"
-                        color: Theme.textFaint
-                        font.pixelSize: 10
-                    }
-
-                    Item { Layout.fillWidth: true }
-
-                    Text {
-                        text: "Phase 1"
-                        color: Theme.textFaint
-                        font.pixelSize: 10
-                    }
-
-                    Text {
-                        text: "DevTools  ↗"
-                        color: Theme.textMuted
-                        font.pixelSize: 10
-                        font.weight: Font.Medium
-                    }
-                }
-            }
         }
     }
 

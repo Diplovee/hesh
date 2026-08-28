@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls
 import QtQuick.Layouts
 import Hesh 1.0
 
@@ -7,65 +8,30 @@ Item {
 
     property var device
     property var manager
+    readonly property bool compact: width < 760
+    property bool showDevTools: false
 
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
 
-        RowLayout {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 72
-            Layout.leftMargin: 30
-            Layout.rightMargin: 28
-            spacing: 12
-
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: 4
-
-                Text {
-                    text: root.device ? root.device.name : ""
-                    color: Theme.text
-                    font.pixelSize: 17
-                    font.weight: Font.Medium
-                }
-
-                Text {
-                    text: root.device ? root.device.typeLabel + " DEVICE  /  " + root.device.profileName : ""
-                    color: Theme.textMuted
-                    font.pixelSize: 10
-                    font.weight: Font.DemiBold
-                    font.letterSpacing: 0.9
-                }
-            }
-
-            IconButton {
-                id: menuButton
-                iconText: "⋯"
-                tooltip: "Device actions"
-                enabled: root.device !== null
-                onClicked: deviceMenu.openFor(menuButton)
-            }
-        }
-
-        DeviceContextMenu {
-            id: deviceMenu
-            manager: root.manager
-            deviceId: root.device ? root.device.id : ""
-            deviceName: root.device ? root.device.name : ""
-            deviceStatus: root.device ? root.device.status : "Stopped"
-        }
-
-        Rectangle {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 1
-            color: Theme.border
-        }
-
         Item {
             id: stage
             Layout.fillWidth: true
             Layout.fillHeight: true
+
+            Rectangle {
+                anchors.fill: parent
+                color: Theme.window
+
+                Text {
+                    anchors.centerIn: parent
+                    visible: !root.device
+                    text: "Select a device to begin"
+                    color: Theme.textFaint
+                    font.pixelSize: 13
+                }
+            }
 
             DeviceFrame {
                 id: deviceFrame
@@ -74,6 +40,7 @@ Item {
                 availableWidth: stage.width
                 availableHeight: stage.height
                 visible: root.device !== null
+                showDevTools: root.showDevTools
 
                 Behavior on presentationScale {
                     NumberAnimation { duration: 160; easing.type: Easing.OutCubic }
@@ -94,15 +61,48 @@ Item {
                 anchors.rightMargin: 28
                 spacing: 18
 
-                Text {
+                TextField {
+                    id: urlField
                     Layout.fillWidth: true
                     text: root.device ? root.device.url : ""
                     color: Theme.textMuted
-                    elide: Text.ElideMiddle
                     font.pixelSize: 11
+                    selectByMouse: true
+                    placeholderText: "Enter a URL"
+                    placeholderTextColor: Theme.textFaint
+                    background: Rectangle {
+                        color: Theme.input
+                        border.width: urlField.activeFocus ? 1 : 0
+                        border.color: Theme.accentStrong
+                        radius: Theme.radiusSmall
+                    }
+                    leftPadding: 10
+                    rightPadding: 10
+                    onAccepted: {
+                        if (root.device && text.trim().length > 0) root.device.url = text.trim()
+                    }
+                }
+
+                AppButton {
+                    compact: true
+                    text: "Go"
+                    onClicked: {
+                        if (root.device && urlField.text.trim().length > 0) {
+                            root.device.url = urlField.text.trim()
+                            urlField.focus = false
+                        }
+                    }
+                }
+
+                AppButton {
+                    compact: true
+                    text: root.showDevTools ? "Hide DevTools" : "DevTools"
+                    secondary: true
+                    onClicked: root.showDevTools = !root.showDevTools
                 }
 
                 Text {
+                    visible: !root.compact
                     text: root.device ? root.device.viewportWidth + " × " + root.device.viewportHeight : ""
                     color: Theme.text
                     font.pixelSize: 11
@@ -110,18 +110,21 @@ Item {
                 }
 
                 Text {
+                    visible: !root.compact
                     text: root.device ? "DPR " + Number(root.device.devicePixelRatio).toFixed(2) : ""
                     color: Theme.textMuted
                     font.pixelSize: 11
                 }
 
                 Text {
+                    visible: !root.compact
                     text: deviceFrame.presentationMode
                     color: Theme.textMuted
                     font.pixelSize: 11
                 }
 
                 Text {
+                    visible: !root.compact
                     text: deviceFrame.presentationPercent + "%"
                     color: Theme.accent
                     font.pixelSize: 11

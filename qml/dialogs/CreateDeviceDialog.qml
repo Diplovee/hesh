@@ -7,29 +7,35 @@ Popup {
     id: root
 
     property var manager
-    property int step: 0
-    property string selectedType: ""
-
     modal: true
     focus: true
     closePolicy: Popup.CloseOnEscape
     anchors.centerIn: Overlay.overlay
     width: 560
-    height: step === 0 ? 420 : 530
+    height: 530
     padding: 0
 
     Overlay.modal: Rectangle { color: "#99080a0e" }
 
     background: Rectangle {
+        id: dialogBackground
         radius: Theme.radiusMedium
         color: Theme.panel
         border.width: 1
         border.color: Theme.borderStrong
+
+        IconButton {
+            anchors.top: parent.top
+            anchors.right: parent.right
+            anchors.topMargin: 12
+            anchors.rightMargin: 12
+            iconText: "×"
+            tooltip: "Close"
+            onClicked: root.close()
+        }
     }
 
     function reset() {
-        step = 0
-        selectedType = ""
         nameField.text = "Pixel 7 Development"
         urlField.text = "http://localhost:3000"
         profileCombo.currentIndex = 0
@@ -51,150 +57,24 @@ Popup {
                 spacing: 4
 
                 Text {
-                    text: root.step === 0 ? "Create Device" : "Create Web Device"
+                    text: "Create Device"
                     color: Theme.text
                     font.pixelSize: 19
                     font.weight: Font.Medium
                 }
 
                 Text {
-                    text: root.step === 0 ? "Choose a runtime for your next test surface." : "Set the viewport and starting URL."
+                    text: "Set the viewport and starting URL."
                     color: Theme.textMuted
                     font.pixelSize: 12
                 }
             }
 
-            IconButton {
-                iconText: "×"
-                tooltip: "Close"
-                onClicked: root.close()
-            }
         }
 
         Item { Layout.preferredHeight: 26 }
 
         ColumnLayout {
-            visible: root.step === 0
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            spacing: 12
-
-            Text {
-                text: "What are you testing?"
-                color: Theme.textMuted
-                font.pixelSize: 11
-                font.weight: Font.DemiBold
-                font.letterSpacing: 0.6
-            }
-
-            RowLayout {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                spacing: 12
-
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    radius: Theme.radiusSmall
-                    color: webMouse.containsMouse ? Theme.accentSoft : Theme.panelRaised
-                    border.width: webMouse.containsMouse ? 1 : 0
-                    border.color: Theme.accentStrong
-
-                    Column {
-                        anchors.centerIn: parent
-                        width: parent.width - 34
-                        spacing: 11
-
-                        Text {
-                            text: "◇"
-                            color: Theme.accent
-                            font.pixelSize: 27
-                        }
-
-                        Text {
-                            text: "Web Device"
-                            color: Theme.text
-                            font.pixelSize: 15
-                            font.weight: Font.Medium
-                        }
-
-                        Text {
-                            text: "Lightweight web\nemulation"
-                            color: Theme.textMuted
-                            lineHeight: 1.25
-                            font.pixelSize: 12
-                        }
-                    }
-
-                    MouseArea {
-                        id: webMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            root.selectedType = "web"
-                            root.step = 1
-                        }
-                    }
-                }
-
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    radius: Theme.radiusSmall
-                    color: Theme.panelRaised
-                    border.width: 1
-                    border.color: Theme.border
-
-                    Column {
-                        anchors.centerIn: parent
-                        width: parent.width - 34
-                        spacing: 11
-
-                        Text {
-                            text: "▣"
-                            color: Theme.textFaint
-                            font.pixelSize: 23
-                        }
-
-                        Text {
-                            text: "Android Device"
-                            color: Theme.textMuted
-                            font.pixelSize: 15
-                            font.weight: Font.Medium
-                        }
-
-                        Text {
-                            text: "Real Android using\nhardware virtualization"
-                            color: Theme.textFaint
-                            lineHeight: 1.25
-                            font.pixelSize: 12
-                        }
-
-                        Rectangle {
-                            width: 96
-                            height: 24
-                            radius: 12
-                            color: Theme.input
-                            border.width: 1
-                            border.color: Theme.border
-
-                            Text {
-                                anchors.centerIn: parent
-                                text: "COMING LATER"
-                                color: Theme.textFaint
-                                font.pixelSize: 9
-                                font.weight: Font.DemiBold
-                                font.letterSpacing: 0.7
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        ColumnLayout {
-            visible: root.step === 1
             Layout.fillWidth: true
             Layout.fillHeight: true
             spacing: 14
@@ -343,7 +223,6 @@ Popup {
             }
 
             AppButton {
-                visible: root.step === 1
                 text: "Create Device"
                 compact: true
                 onClicked: {
@@ -355,4 +234,5 @@ Popup {
             }
         }
     }
+
 }

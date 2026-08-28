@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+script_path="$(readlink -f -- "${BASH_SOURCE[0]}")"
+project_dir="$(cd -- "$(dirname -- "$script_path")" && pwd)"
+build_dir="$project_dir/build"
+
+if [[ ! -f "$build_dir/Makefile" ]]; then
+    if ! command -v cmake >/dev/null 2>&1; then
+        echo "No build found and cmake is not installed." >&2
+        exit 1
+    fi
+
+    cmake -B "$build_dir" -S "$project_dir"
+fi
+
+make -C "$build_dir" -j"$(nproc)"
+exec "$build_dir/hesh" "$@"
