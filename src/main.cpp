@@ -32,6 +32,10 @@ int main(int argc, char* argv[])
         }
     }
     qputenv("QTWEBENGINE_CHROMIUM_FLAGS", chromiumFlags);
+    // HiDPI: use PassThrough for fractional scales (e.g. 1.25/1.5 on Hyprland)
+    // so WebEngine renders at native physical resolution instead of rounded.
+    QGuiApplication::setHighDpiScaleFactorRoundingPolicy(
+        Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
     QtWebEngineQuick::initialize();
 
     QGuiApplication app(argc, argv);

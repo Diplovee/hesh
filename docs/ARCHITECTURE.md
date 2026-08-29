@@ -1,6 +1,6 @@
 # Hesh architecture
 
-This document describes Hesh **0.1.2**.
+This document describes Hesh **0.1.3**.
 
 Hesh keeps the QML presentation layer separate from the C++ application and
 device infrastructure.
@@ -55,10 +55,12 @@ pixel ratio, and user agent. The built-in catalog includes Pixel 7, Pixel 8,
 iPhone 14, Galaxy S24, iPad, Desktop, and Custom.
 
 The web content's logical viewport is kept separate from its visual scale.
-`DeviceFrame` gives `WebEngineView` the selected profile's logical dimensions,
-then scales the containing frame down to fit the workspace. Scaling the QML
-item therefore changes presentation size without changing the website's CSS
-viewport.
+`DeviceFrame` sizes `WebEngineView` directly to its visual size and sets
+`zoomFactor` to `presentationScale`, so `CSS viewport = visual / zoom` stays
+at the profile's logical size. The view is not scaled with an `Item.scale`
+transform, which avoids bilinear-filter blur and respects the window's
+`devicePixelRatio` (with `PassThrough` rounding on fractional Wayland scales)
+for crisp native raster.
 
 The preview runs with WebEngine's normal hardware-accelerated backend. Loading
 state is driven by both navigation status and load progress so a rendered page

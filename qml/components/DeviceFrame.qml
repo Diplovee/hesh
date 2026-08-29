@@ -18,8 +18,10 @@ Item {
     property bool showChrome: true
     property bool allowUpscale: false
     property real presentationPadding: root.showChrome ? 32 : 0
-    property real minimumPresentationScale: root.allowUpscale ? 0.01 : 0.1
-    property real maximumPresentationScale: root.allowUpscale ? 8.0 : 1.0
+    // Clamped to WebEngine's supported zoom range (0.25–5.0) to avoid
+    // bilinear fallback when the workspace is tiny.
+    property real minimumPresentationScale: root.allowUpscale ? 0.25 : 0.25
+    property real maximumPresentationScale: root.allowUpscale ? 5.0 : 1.0
     property bool pageLoaded: false
     property bool pageLoading: false
     property bool pageFailed: false
@@ -29,12 +31,40 @@ Item {
     property int devToolsWidth: 420
     property bool devToolsThemeApplied: false
     property int devToolsThemeAttempts: 0
+    // Effective chrome metrics scaled with presentation to keep border
+    // proportions correct when we render without Item.scale transform.
+    property real effectiveBezel: root.bezel * root.presentationScale
+    property real effectiveRadius: root.screenRadius * root.presentationScale
+    property real profileDpr: root.device ? root.device.devicePixelRatio : 1.0
 
     function localPath(location) {
         // StandardPaths returns a URL in QML, while WebEngineProfile expects a
         // native filesystem path. Passing the URL verbatim creates a literal
         // "file:" directory relative to the process working directory.
         return decodeURIComponent(location.toString().replace(/^file:\/\//, ""))
+    }
+
+    function syncDevicePixelRatio() {
+        if (!root.profileReady || !root.device || webView.url.toString() === "about:blank")
+            return
+        var dpr = root.profileDpr
+        if (dpr <= 0) return
+        var vw = root.device.viewportWidth
+        // Emulate devicePixelRatio for CSS media queries, srcset and JS.
+        // Runs after load; complements native backing-store which already
+        // uses the window's Screen.devicePixelRatio with PassThrough rounding.
+        webView.runJavaScript(
+            "(() => { try {"
+            + " const dpr = " + dpr + ";"
+            + " try { Object.defineProperty(window, 'devicePixelRatio', { get: () => dpr, configurable: true }); } catch(e) {}"
+            + " let m = document.querySelector('meta[name=viewport]');"
+            + " if (!m) { m = document.createElement('meta'); m.name='viewport'; if (document.head) document.head.appendChild(m); }"
+            + " let c = m.getAttribute('content') || '';"
+            + " if (!c.includes('width=')) c = (c ? c + ', ' : '') + 'width=" + vw + "';"
+            + " if (!c.includes('initial-scale')) c += (c ? ', ' : '') + 'initial-scale=1';"
+            + " m.setAttribute('content', c);"
+            + " try { document.documentElement.style.setProperty('--hesh-dpr', String(dpr)); } catch(e) {}"
+            + " return true; } catch(e){ return false; } })()")
     }
 
     function applyDevToolsDarkTheme() {
@@ -85,17 +115,20 @@ Item {
         }
     }
 
-    // The content item remains the logical viewport. Only the outer frame is scaled.
+    // The WebEngineView is now sized directly to its visual size and its
+    // zoomFactor is set to presentationScale. This keeps CSS viewport
+    // (visual / zoom) at the profile's logical size while rendering at the
+    // exact display size – no Item.scale bilinear filtering.
     property real presentationScale: root.device
-                                      ? Math.min(root.maximumPresentationScale,
-                                                 Math.max(root.minimumPresentationScale, (root.availableWidth
-                                                          - root.presentationPadding
-                                                          - (root.showDevTools ? root.devToolsWidth + 16 : 0))
-                                                          / (root.device.viewportWidth + root.bezel * 2)),
-                                                 Math.max(root.minimumPresentationScale, (root.availableHeight
-                                                          - root.presentationPadding)
-                                                          / (root.device.viewportHeight + root.bezel * 2)))
-                                      : 1.0
+                                       ? Math.min(root.maximumPresentationScale,
+                                                  Math.max(root.minimumPresentationScale, (root.availableWidth
+                                                           - root.presentationPadding
+                                                           - (root.showDevTools ? root.devToolsWidth + 16 : 0))
+                                                           / (root.device.viewportWidth + root.bezel * 2)),
+                                                  Math.max(root.minimumPresentationScale, (root.availableHeight
+                                                           - root.presentationPadding)
+                                                           / (root.device.viewportHeight + root.bezel * 2)))
+                                       : 1.0
     readonly property int presentationPercent: Math.round(root.presentationScale * 100)
     readonly property string presentationMode: root.allowUpscale ? "Scale" : "Fit"
     readonly property bool canGoBack: webView.canGoBack
@@ -118,6 +151,15 @@ Item {
         root.pageLoading = false
         root.pageFailed = false
         root.pageError = ""
+        if (root.profileReady && root.device) {
+            var p = deviceProfile.instance()
+            if (p && root.device.userAgent) p.httpUserAgent = root.device.userAgent
+            root.syncDevicePixelRatio()
+        }
+    }
+
+    onProfileDprChanged: {
+        if (root.profileReady) root.syncDevicePixelRatio()
     }
 
     // Every device gets its own browser profile. This keeps localStorage,
@@ -150,16 +192,14 @@ Item {
 
     Rectangle {
         id: frame
-        width: root.device ? root.device.viewportWidth + root.bezel * 2 : 0
-        height: root.device ? root.device.viewportHeight + root.bezel * 2 : 0
+        width: root.device ? (root.device.viewportWidth + root.bezel * 2) * root.presentationScale : 0
+        height: root.device ? (root.device.viewportHeight + root.bezel * 2) * root.presentationScale : 0
         anchors.verticalCenter: parent.verticalCenter
         anchors.left: parent.left
-        anchors.leftMargin: root.showDevTools ? 0 : (root.width - width) / 2
-        scale: root.presentationScale
-        transformOrigin: Item.Center
-        smooth: true
+        anchors.leftMargin: root.showDevTools ? 0 : (root.width - width - (root.showDevTools ? root.devToolsWidth + 16 : 0)) / 2
+        // No scale transform – geometry is directly sized for crisp raster.
         antialiasing: true
-        radius: root.showChrome ? root.screenRadius : 0
+        radius: root.showChrome ? root.effectiveRadius : 0
         color: root.showChrome ? Theme.panelRaised : "transparent"
         border.width: root.showChrome ? 1 : 0
         border.color: root.showChrome ? Theme.borderStrong : "transparent"
@@ -167,26 +207,27 @@ Item {
 
         Text {
             anchors.top: parent.top
-            anchors.topMargin: 1
+            anchors.topMargin: 1 * root.presentationScale
             anchors.horizontalCenter: parent.horizontalCenter
-            height: root.bezel - 2
+            height: Math.max(1, root.effectiveBezel - 2 * root.presentationScale)
             verticalAlignment: Text.AlignVCenter
             text: root.device ? root.device.profileName : ""
-            visible: root.showChrome
+            visible: root.showChrome && root.presentationScale > 0.45
             color: Theme.textFaint
-            font.pixelSize: 9
+            font.pixelSize: Math.max(7, Math.round(9 * Math.min(1.0, root.presentationScale)))
             font.weight: Font.Medium
         }
 
         Rectangle {
             id: contentSurface
             anchors.fill: parent
-            anchors.margins: root.bezel
-            radius: root.showChrome ? root.screenRadius : 0
+            anchors.margins: root.effectiveBezel
+            // Top margin leaves room for profile label when chrome is shown
+            anchors.topMargin: root.showChrome ? root.effectiveBezel + (root.presentationScale > 0.45 ? Math.max(8, 10 * root.presentationScale) : 0) : root.effectiveBezel
+            radius: root.showChrome ? Math.max(0, root.effectiveRadius - root.effectiveBezel * 0.5) : 0
             color: "#0d1014"
             border.width: 0
             clip: true
-            smooth: true
 
             Rectangle {
                 anchors.fill: parent
@@ -239,15 +280,18 @@ Item {
                 z: 0
                 url: root.profileReady && root.device && root.device.status === "Running"
                      ? root.device.url : "about:blank"
-                // Keep page layout at the profile's logical viewport while
-                // retaining the GPU-backed raster path for crisp scaled output.
-                zoomFactor: 1.0
+                // Render directly at visual size: zoom = presentationScale
+                // keeps CSS viewport = visual / zoom = profile logical size
+                // while backing store = visual * Screen.devicePixelRatio is
+                // native and not bilinear-filtered. Clamped to WebEngine limits.
+                zoomFactor: Math.max(0.25, Math.min(5.0, root.presentationScale > 0 ? root.presentationScale : 1.0))
                 backgroundColor: "#0d1014"
                 settings.accelerated2dCanvasEnabled: true
                 settings.webGLEnabled: true
                 settings.fullScreenSupportEnabled: false
                 settings.javascriptEnabled: true
                 settings.localContentCanAccessRemoteUrls: true
+                // Ensure high-DPI pixmaps and playback are crisp
                 onLoadProgressChanged: {
                     // loadingChanged can arrive late for development servers.
                     // Reveal the page as soon as Chromium has rendered it.
@@ -255,6 +299,7 @@ Item {
                         root.pageLoading = false
                         root.pageLoaded = true
                         root.pageFailed = false
+                        root.syncDevicePixelRatio()
                     }
                 }
                 onLoadingChanged: function(loadRequest) {
@@ -267,6 +312,7 @@ Item {
                         root.pageLoading = false
                         root.pageLoaded = true
                         root.pageFailed = false
+                        root.syncDevicePixelRatio()
                     } else if (loadRequest.status === WebEngineView.LoadFailedStatus) {
                         root.pageLoading = false
                         root.pageLoaded = false
@@ -277,10 +323,11 @@ Item {
                 }
             }
 
+            // Corner masks scaled with presentation
             Shape {
-                width: root.screenRadius
-                height: root.screenRadius
-                visible: root.showChrome
+                width: root.effectiveRadius
+                height: root.effectiveRadius
+                visible: root.showChrome && root.effectiveRadius > 0.5
                 anchors.left: parent.left
                 anchors.top: parent.top
                 z: 2
@@ -290,23 +337,23 @@ Item {
                     strokeColor: "transparent"
                     startX: 0
                     startY: 0
-                    PathLine { x: root.screenRadius; y: 0 }
+                    PathLine { x: root.effectiveRadius; y: 0 }
                     PathCubic {
-                        control1X: root.screenRadius * 0.4477
+                        control1X: root.effectiveRadius * 0.4477
                         control1Y: 0
                         control2X: 0
-                        control2Y: root.screenRadius * 0.4477
+                        control2Y: root.effectiveRadius * 0.4477
                         x: 0
-                        y: root.screenRadius
+                        y: root.effectiveRadius
                     }
                     PathLine { x: 0; y: 0 }
                 }
             }
 
             Shape {
-                width: root.screenRadius
-                height: root.screenRadius
-                visible: root.showChrome
+                width: root.effectiveRadius
+                height: root.effectiveRadius
+                visible: root.showChrome && root.effectiveRadius > 0.5
                 anchors.right: parent.right
                 anchors.top: parent.top
                 z: 2
@@ -316,12 +363,12 @@ Item {
                     strokeColor: "transparent"
                     startX: 0
                     startY: 0
-                    PathLine { x: root.screenRadius; y: 0 }
-                    PathLine { x: root.screenRadius; y: root.screenRadius }
+                    PathLine { x: root.effectiveRadius; y: 0 }
+                    PathLine { x: root.effectiveRadius; y: root.effectiveRadius }
                     PathCubic {
-                        control1X: root.screenRadius
-                        control1Y: root.screenRadius * 0.4477
-                        control2X: root.screenRadius * 0.5523
+                        control1X: root.effectiveRadius
+                        control1Y: root.effectiveRadius * 0.4477
+                        control2X: root.effectiveRadius * 0.5523
                         control2Y: 0
                         x: 0
                         y: 0
@@ -330,9 +377,9 @@ Item {
             }
 
             Shape {
-                width: root.screenRadius
-                height: root.screenRadius
-                visible: root.showChrome
+                width: root.effectiveRadius
+                height: root.effectiveRadius
+                visible: root.showChrome && root.effectiveRadius > 0.5
                 anchors.left: parent.left
                 anchors.bottom: parent.bottom
                 z: 2
@@ -342,13 +389,13 @@ Item {
                     strokeColor: "transparent"
                     startX: 0
                     startY: 0
-                    PathLine { x: 0; y: root.screenRadius }
-                    PathLine { x: root.screenRadius; y: root.screenRadius }
+                    PathLine { x: 0; y: root.effectiveRadius }
+                    PathLine { x: root.effectiveRadius; y: root.effectiveRadius }
                     PathCubic {
-                        control1X: root.screenRadius * 0.4477
-                        control1Y: root.screenRadius
+                        control1X: root.effectiveRadius * 0.4477
+                        control1Y: root.effectiveRadius
                         control2X: 0
-                        control2Y: root.screenRadius * 0.5523
+                        control2Y: root.effectiveRadius * 0.5523
                         x: 0
                         y: 0
                     }
@@ -356,9 +403,9 @@ Item {
             }
 
             Shape {
-                width: root.screenRadius
-                height: root.screenRadius
-                visible: root.showChrome
+                width: root.effectiveRadius
+                height: root.effectiveRadius
+                visible: root.showChrome && root.effectiveRadius > 0.5
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
                 z: 2
@@ -367,16 +414,16 @@ Item {
                     fillColor: Theme.panelRaised
                     strokeColor: "transparent"
                     startX: 0
-                    startY: root.screenRadius
-                    PathLine { x: root.screenRadius; y: root.screenRadius }
-                    PathLine { x: root.screenRadius; y: 0 }
+                    startY: root.effectiveRadius
+                    PathLine { x: root.effectiveRadius; y: root.effectiveRadius }
+                    PathLine { x: root.effectiveRadius; y: 0 }
                     PathCubic {
-                        control1X: root.screenRadius * 0.5523
-                        control1Y: root.screenRadius
-                        control2X: root.screenRadius
-                        control2Y: root.screenRadius * 0.4477
+                        control1X: root.effectiveRadius * 0.5523
+                        control1Y: root.effectiveRadius
+                        control2X: root.effectiveRadius
+                        control2Y: root.effectiveRadius * 0.4477
                         x: 0
-                        y: root.screenRadius
+                        y: root.effectiveRadius
                     }
                 }
             }
@@ -386,8 +433,7 @@ Item {
     Rectangle {
         id: devToolsPanel
         visible: root.showDevTools
-        x: (root.device ? (root.device.viewportWidth + root.bezel * 2)
-             * (1 + root.presentationScale) / 2 : 0) + 16
+        x: root.device ? (root.device.viewportWidth + root.bezel * 2) * root.presentationScale + 16 : 0
         y: 0
         width: root.devToolsWidth
         height: root.height
