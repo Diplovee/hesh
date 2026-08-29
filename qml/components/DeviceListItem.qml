@@ -9,9 +9,14 @@ Item {
     required property string deviceName
     required property string deviceTypeLabel
     required property string deviceStatus
+    required property var deviceObject
+    property var device: deviceObject
     property var manager
     property bool selected: false
+    property bool standalone: false
     signal activated()
+    signal openStandaloneRequested(var device)
+    signal deviceRemovalRequested(string deviceId)
 
     implicitHeight: 76
     width: ListView.view ? ListView.view.width : 220
@@ -108,5 +113,9 @@ Item {
         deviceId: root.deviceId
         deviceName: root.deviceName
         deviceStatus: root.deviceStatus
+        device: root.device
+        standalone: root.standalone
+        onOpenStandaloneRequested: (selectedDevice) => root.openStandaloneRequested(selectedDevice)
+        onDeviceRemovalRequested: (removedDeviceId) => root.deviceRemovalRequested(removedDeviceId)
     }
 }

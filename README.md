@@ -18,6 +18,8 @@ Implemented:
 - Create-device flow with an explicit Android “Coming later” state
 - Embedded Qt WebEngine web-device preview
 - Embedded Chromium DevTools with a persistent dark appearance
+- Frameless standalone device windows that Hyprland can tile, float, resize,
+  and move between workspaces
 - Logical viewport sizing kept separate from visual workspace scaling
 - QSettings-backed persistence for devices and selected device
 - Isolated, persistent cookies, local storage, IndexedDB, and disk cache per web device
@@ -27,7 +29,6 @@ Implemented:
 Not implemented yet:
 
 - Android devices, QEMU, KVM, ADB, APK installation, images, or snapshots
-- Standalone native device windows
 - Full browser navigation toolbar and advanced developer-tool hosting controls
 - Project-local configuration or remote device management
 
@@ -93,11 +94,11 @@ boundary.
 
 ## Roadmap
 
-### Phase 2 — Web Device Runtime + standalone windows
+### Phase 2 — Web Device Runtime + host controls
 
-Prove the browser runtime boundary further, add navigation and host controls,
-and allow a device to be presented in its own native window without changing
-`DeviceManager`.
+The standalone host is now in place without changing `DeviceManager`. The
+remaining work is to prove the browser runtime boundary further and add
+navigation and advanced host controls.
 
 ### Phase 3 — QEMU/KVM Android runtime prototype
 

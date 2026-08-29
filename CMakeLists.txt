@@ -69,6 +69,8 @@ qt_add_qml_module(hesh
         qml/Main.qml
         qml/components/AppButton.qml
         qml/components/DeviceFrame.qml
+        qml/components/StandaloneDeviceWindow.qml
+        qml/components/StandaloneContextMenu.qml
         qml/components/DeviceContextMenu.qml
         qml/components/DeviceListItem.qml
         qml/components/EmptyState.qml

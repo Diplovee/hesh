@@ -10,6 +10,10 @@ Popup {
     property string deviceId: ""
     property string deviceName: ""
     property string deviceStatus: "Stopped"
+    property var device
+    property bool standalone: false
+    signal openStandaloneRequested(var device)
+    signal deviceRemovalRequested(string deviceId)
 
     parent: Overlay.overlay
     width: 224
@@ -49,6 +53,7 @@ Popup {
             return
         }
         close()
+        root.deviceRemovalRequested(root.deviceId)
         root.manager.removeDevice(root.deviceId)
     }
 
@@ -95,6 +100,33 @@ Popup {
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 onClicked: root.toggleDevice()
+            }
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 36
+            radius: 5
+            color: windowMouse.containsMouse ? Theme.panelSoft : "transparent"
+
+            Text {
+                anchors.left: parent.left
+                anchors.leftMargin: 10
+                anchors.verticalCenter: parent.verticalCenter
+                text: root.standalone ? "Focus Window" : "Open in Window"
+                color: Theme.text
+                font.pixelSize: 12
+            }
+
+            MouseArea {
+                id: windowMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                    root.close()
+                    root.openStandaloneRequested(root.device)
+                }
             }
         }
 

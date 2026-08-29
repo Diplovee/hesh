@@ -7,11 +7,19 @@ import Hesh 1.0
 Item {
     id: root
 
-    property var device
+    property var device: null
     property real availableWidth: 620
     property real availableHeight: 560
     property int bezel: 12
     property int screenRadius: 14
+    // Embedded previews keep the device bezel and fit down to the workspace.
+    // Standalone hosts turn the chrome off and may scale in either direction
+    // while preserving the browser's logical viewport dimensions.
+    property bool showChrome: true
+    property bool allowUpscale: false
+    property real presentationPadding: root.showChrome ? 32 : 0
+    property real minimumPresentationScale: root.allowUpscale ? 0.01 : 0.1
+    property real maximumPresentationScale: root.allowUpscale ? 8.0 : 1.0
     property bool pageLoaded: false
     property bool pageLoading: false
     property bool pageFailed: false
@@ -79,15 +87,23 @@ Item {
 
     // The content item remains the logical viewport. Only the outer frame is scaled.
     property real presentationScale: root.device
-                                      ? Math.min(1.0,
-                                                 Math.max(0.1, (root.availableWidth - 32
+                                      ? Math.min(root.maximumPresentationScale,
+                                                 Math.max(root.minimumPresentationScale, (root.availableWidth
+                                                          - root.presentationPadding
                                                           - (root.showDevTools ? root.devToolsWidth + 16 : 0))
                                                           / (root.device.viewportWidth + root.bezel * 2)),
-                                                 Math.max(0.1, (root.availableHeight - 32)
+                                                 Math.max(root.minimumPresentationScale, (root.availableHeight
+                                                          - root.presentationPadding)
                                                           / (root.device.viewportHeight + root.bezel * 2)))
                                       : 1.0
     readonly property int presentationPercent: Math.round(root.presentationScale * 100)
-    readonly property string presentationMode: "Fit"
+    readonly property string presentationMode: root.allowUpscale ? "Scale" : "Fit"
+    readonly property bool canGoBack: webView.canGoBack
+    readonly property bool canGoForward: webView.canGoForward
+
+    function reloadPage() { webView.reload() }
+    function goBack() { webView.goBack() }
+    function goForward() { webView.goForward() }
 
     width: root.device
            ? (root.device.viewportWidth + root.bezel * 2) * root.presentationScale
@@ -124,7 +140,11 @@ Item {
     Component.onCompleted: {
         // Assign after construction; assigning instance() through a binding
         // during WebEngineView creation can crash Qt WebEngine on Wayland.
-        webView.profile = deviceProfile.instance()
+        var profile = deviceProfile.instance()
+        if (root.device && root.device.userAgent) {
+            profile.httpUserAgent = root.device.userAgent
+        }
+        webView.profile = profile
         root.profileReady = true
     }
 
@@ -137,10 +157,10 @@ Item {
         anchors.leftMargin: root.showDevTools ? 0 : (root.width - width) / 2
         scale: root.presentationScale
         transformOrigin: Item.Center
-        radius: root.screenRadius
-        color: Theme.panelRaised
-        border.width: 1
-        border.color: Theme.borderStrong
+        radius: root.showChrome ? root.screenRadius : 0
+        color: root.showChrome ? Theme.panelRaised : "transparent"
+        border.width: root.showChrome ? 1 : 0
+        border.color: root.showChrome ? Theme.borderStrong : "transparent"
         clip: true
 
         Text {
@@ -150,6 +170,7 @@ Item {
             height: root.bezel - 2
             verticalAlignment: Text.AlignVCenter
             text: root.device ? root.device.profileName : ""
+            visible: root.showChrome
             color: Theme.textFaint
             font.pixelSize: 9
             font.weight: Font.Medium
@@ -159,7 +180,7 @@ Item {
             id: contentSurface
             anchors.fill: parent
             anchors.margins: root.bezel
-            radius: root.screenRadius
+            radius: root.showChrome ? root.screenRadius : 0
             color: "#0d1014"
             border.width: 0
             clip: true
@@ -251,6 +272,7 @@ Item {
             Shape {
                 width: root.screenRadius
                 height: root.screenRadius
+                visible: root.showChrome
                 anchors.left: parent.left
                 anchors.top: parent.top
                 z: 2
@@ -276,6 +298,7 @@ Item {
             Shape {
                 width: root.screenRadius
                 height: root.screenRadius
+                visible: root.showChrome
                 anchors.right: parent.right
                 anchors.top: parent.top
                 z: 2
@@ -301,6 +324,7 @@ Item {
             Shape {
                 width: root.screenRadius
                 height: root.screenRadius
+                visible: root.showChrome
                 anchors.left: parent.left
                 anchors.bottom: parent.bottom
                 z: 2
@@ -326,6 +350,7 @@ Item {
             Shape {
                 width: root.screenRadius
                 height: root.screenRadius
+                visible: root.showChrome
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
                 z: 2

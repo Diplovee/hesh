@@ -74,9 +74,9 @@ rather than applying a content color inversion filter.
 
 ## Presentation boundary
 
-The current presentation is embedded in the main workspace. The device model
-does not depend on that workspace. A future presentation layer can route a
-device to either of these hosts:
+The presentation layer can route a device to either an embedded workspace or
+an independent top-level window. The device model does not depend on either
+host:
 
 ```text
 Device
@@ -86,9 +86,18 @@ Presentation
    └── Standalone
 ```
 
-Standalone windows should be implemented as a separate QML window host that
-binds to the same `Device` object, not by coupling runtime behavior to
-`DeviceWorkspace.qml`.
+`StandaloneDeviceWindow.qml` binds to the same `Device` object as the embedded
+host. Main-window presentation state owns one window per device, removes the
+embedded `WebEngineView` before creating a standalone host, and destroys that
+surface before restoring the embedded preview. Both hosts create a
+device-id-keyed `WebEngineProfile`, so cookies, local storage, IndexedDB, and
+disk cache persist while transient page state can reset when a host changes.
+Standalone windows are frameless, have no transient parent, and scale a fixed
+logical viewport inside the compositor-sized window. Their initial size is
+calculated from Qt's available screen work area so reserved panels are left
+visible, and the standalone presentation never upscales the browser surface.
+Their placement and open state are session-only and are not restored from
+`Settings`.
 
 ## Future Android runtime
 

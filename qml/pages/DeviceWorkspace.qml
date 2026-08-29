@@ -3,13 +3,26 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import Hesh 1.0
 
+pragma ComponentBehavior: Bound
+
 Item {
     id: root
 
-    property var device
+    property var device: null
     property var manager
     readonly property bool compact: width < 760
     property bool showDevTools: false
+    property bool standalone: false
+    property bool frameEnabled: true
+    signal openStandaloneRequested(var device)
+
+    onDeviceChanged: {
+        // A Loader otherwise reuses the same DeviceFrame when selection
+        // changes. Recreating it also recreates the WebEngineProfile binding,
+        // keeping each device's browser data isolated.
+        root.frameEnabled = false
+        Qt.callLater(function() { root.frameEnabled = true })
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -26,17 +39,46 @@ Item {
 
                 Text {
                     anchors.centerIn: parent
-                    visible: !root.device
+                    visible: !root.device && !root.standalone
                     text: "Select a device to begin"
                     color: Theme.textFaint
                     font.pixelSize: 13
+                }
+
+                Column {
+                    anchors.centerIn: parent
+                    spacing: 12
+                    visible: root.device !== null && root.standalone
+
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: "OPEN IN STANDALONE WINDOW"
+                        color: Theme.accent
+                        font.pixelSize: 10
+                        font.weight: Font.DemiBold
+                        font.letterSpacing: 1.5
+                    }
+
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: root.device ? root.device.name : ""
+                        color: Theme.textMuted
+                        font.pixelSize: 12
+                    }
+
+                    AppButton {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: "Focus Window"
+                        compact: true
+                        onClicked: root.openStandaloneRequested(root.device)
+                    }
                 }
             }
 
             Loader {
                 id: deviceLoader
                 anchors.centerIn: parent
-                active: root.device !== null
+                active: root.device !== null && !root.standalone && root.frameEnabled
                 sourceComponent: deviceFrameComponent
 
                 Component {
@@ -106,7 +148,16 @@ Item {
                     compact: true
                     text: root.showDevTools ? "Hide DevTools" : "DevTools"
                     secondary: true
+                    visible: !root.standalone
                     onClicked: root.showDevTools = !root.showDevTools
+                }
+
+                AppButton {
+                    compact: true
+                    text: root.standalone ? "Focus Window" : "Open in Window"
+                    secondary: root.standalone
+                    visible: root.device !== null
+                    onClicked: root.openStandaloneRequested(root.device)
                 }
 
                 Text {

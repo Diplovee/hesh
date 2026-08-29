@@ -19,6 +19,159 @@ ApplicationWindow {
 
     property bool maximized: false
     readonly property bool compactWindow: width < 760
+    // Presentation is session-only. The maps are replaced (rather than
+    // mutated in place) so all QML bindings observing them are invalidated.
+    property var standaloneWindows: ({})
+    property var detachedDeviceIds: ({})
+    property var pendingStandaloneIds: ({})
+    property bool shuttingDown: false
+
+    function copyMap(source) {
+        var result = {}
+        for (var key in source) result[key] = source[key]
+        return result
+    }
+
+    function setDetached(deviceId, detached) {
+        if (!deviceId) return
+        var next = copyMap(window.detachedDeviceIds)
+        if (detached) next[deviceId] = true
+        else delete next[deviceId]
+        window.detachedDeviceIds = next
+    }
+
+    function setPending(deviceId, pending) {
+        if (!deviceId) return
+        var next = copyMap(window.pendingStandaloneIds)
+        if (pending) next[deviceId] = true
+        else delete next[deviceId]
+        window.pendingStandaloneIds = next
+    }
+
+    function isDeviceDetached(deviceId) {
+        return !!(deviceId && window.detachedDeviceIds[deviceId] === true)
+    }
+
+    function rememberStandalone(deviceId, host) {
+        var next = copyMap(window.standaloneWindows)
+        next[deviceId] = host
+        window.standaloneWindows = next
+    }
+
+    function forgetStandalone(deviceId) {
+        var next = copyMap(window.standaloneWindows)
+        delete next[deviceId]
+        window.standaloneWindows = next
+    }
+
+    function finishStandalone(deviceId, host) {
+        if (!deviceId) return
+        var current = window.standaloneWindows[deviceId]
+        if (current && current !== host) return
+        if (host) {
+            // Release the WebEngine surface first. This guarantees the
+            // embedded Loader cannot create a second live page while the
+            // standalone object's deferred destruction is pending.
+            host.releaseBrowserSurface()
+            host.suppressCloseSignal = true
+            host.destroy()
+        }
+        forgetStandalone(deviceId)
+        setDetached(deviceId, false)
+    }
+
+    function closeStandaloneForDevice(deviceId) {
+        var host = window.standaloneWindows[deviceId]
+        if (!host) {
+            setPending(deviceId, false)
+            setDetached(deviceId, false)
+            return
+        }
+        host.releaseBrowserSurface()
+        host.suppressCloseSignal = true
+        host.close()
+        host.destroy()
+        forgetStandalone(deviceId)
+        setDetached(deviceId, false)
+    }
+
+    function openStandaloneForDevice(device) {
+        if (!device || !device.id) return
+        var deviceId = device.id
+        var existing = window.standaloneWindows[deviceId]
+        if (existing) {
+            existing.focusWindow()
+            return
+        }
+        if (window.pendingStandaloneIds[deviceId]) return
+
+        // Detach first. The actual Window is created on the next turn, after
+        // DeviceWorkspace's Loader has synchronously torn down its WebEngineView.
+        setPending(deviceId, true)
+        setDetached(deviceId, true)
+        Qt.callLater(function() {
+            if (!window.detachedDeviceIds[deviceId]) {
+                setPending(deviceId, false)
+                return
+            }
+            setPending(deviceId, false)
+            if (window.shuttingDown || !device || !device.id) {
+                setDetached(deviceId, false)
+                return
+            }
+            if (window.standaloneWindows[deviceId]) {
+                window.standaloneWindows[deviceId].focusWindow()
+                return
+            }
+            var host = standaloneWindowComponent.createObject(null, { device: device })
+            if (!host) {
+                setDetached(deviceId, false)
+                return
+            }
+            rememberStandalone(deviceId, host)
+            host.closedByUser.connect(function(closedId) {
+                window.finishStandalone(closedId || deviceId, host)
+            })
+            host.deviceUnavailable.connect(function(unavailableId) {
+                window.finishStandalone(unavailableId || deviceId, host)
+            })
+            host.show()
+            host.focusWindow()
+        })
+    }
+
+    function closeAllStandaloneWindows() {
+        var snapshot = copyMap(window.standaloneWindows)
+        for (var deviceId in snapshot) {
+            var host = snapshot[deviceId]
+            if (!host) continue
+            host.releaseBrowserSurface()
+            host.suppressCloseSignal = true
+            host.close()
+            host.destroy()
+        }
+        window.standaloneWindows = ({})
+        window.pendingStandaloneIds = ({})
+        // Keep the embedded loaders detached while the main window is
+        // shutting down; restoring a WebEngineView here would only create a
+        // transient browser surface during application teardown.
+    }
+
+    onClosing: {
+        window.shuttingDown = true
+        window.closeAllStandaloneWindows()
+    }
+
+    Connections {
+        target: Qt.application
+        function onAboutToQuit() {
+            if (!window.shuttingDown) {
+                window.shuttingDown = true
+                window.closeAllStandaloneWindows()
+            }
+        }
+    }
+
     function toggleMaximize() {
         if (maximized) {
             showNormal()
@@ -128,6 +281,9 @@ ApplicationWindow {
                     visible: !window.compactWindow
                     manager: deviceManager
                     onAddDeviceRequested: createDeviceDialog.open()
+                    standaloneDeviceIds: window.detachedDeviceIds
+                    onOpenStandaloneRequested: (device) => window.openStandaloneForDevice(device)
+                    onDeviceRemovalRequested: (deviceId) => window.closeStandaloneForDevice(deviceId)
                 }
 
                 Rectangle {
@@ -146,6 +302,10 @@ ApplicationWindow {
                         visible: deviceManager.deviceCount > 0
                         manager: deviceManager
                         device: deviceManager.selectedDevice
+                        standalone: deviceManager.selectedDevice
+                                     ? window.isDeviceDetached(deviceManager.selectedDevice.id)
+                                     : false
+                        onOpenStandaloneRequested: (device) => window.openStandaloneForDevice(device)
                     }
                 }
             }
@@ -156,5 +316,10 @@ ApplicationWindow {
     CreateDeviceDialog {
         id: createDeviceDialog
         manager: deviceManager
+    }
+
+    Component {
+        id: standaloneWindowComponent
+        StandaloneDeviceWindow { }
     }
 }

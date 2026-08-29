@@ -8,7 +8,10 @@ Rectangle {
     id: root
 
     property var manager
+    property var standaloneDeviceIds: ({})
     signal addDeviceRequested()
+    signal openStandaloneRequested(var device)
+    signal deviceRemovalRequested(string deviceId)
     color: Theme.panel
     border.width: 1
     border.color: Theme.border
@@ -53,9 +56,12 @@ Rectangle {
 
             delegate: DeviceListItem {
                 manager: root.manager
+                standalone: root.standaloneDeviceIds[deviceId] === true
                 selected: root.manager && root.manager.selectedDevice
                           && root.manager.selectedDevice.id === deviceId
                 onActivated: if (root.manager) root.manager.selectDevice(deviceId)
+                onOpenStandaloneRequested: (selectedDevice) => root.openStandaloneRequested(selectedDevice)
+                onDeviceRemovalRequested: (removedDeviceId) => root.deviceRemovalRequested(removedDeviceId)
             }
 
             Text {
