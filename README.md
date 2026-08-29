@@ -1,6 +1,6 @@
 # Hesh
 
-Current version: **0.1.3**
+Current version: **0.1.4**
 
 Hesh is a lightweight Linux desktop environment for developing and testing
 web devices, with a future path to real Android virtual devices. It is a

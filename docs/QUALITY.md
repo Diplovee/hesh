@@ -1,6 +1,6 @@
-# Hesh Rendering Quality Guide (0.1.3)
+# Hesh Rendering Quality Guide (0.1.3–0.1.4)
 
-This document explains why device previews were blurry, how `0.1.3` fixes it for **all profiles**, and how to keep quality crisp when adding future profiles or presentation modes.
+This document explains why device previews were blurry *and* why colors were off, how `0.1.3`/`0.1.4` fixes both for **all profiles**, and how to keep quality crisp when adding future profiles or presentation modes.
 
 ## 1. TL;DR — The Rule
 
@@ -107,22 +107,42 @@ Prevents invisible `zoomFactor <0.25` clamping which would make `CSS = visual/0.
 * **Do not** reintroduce `Item.scale` on any ancestor of `WebEngineView`. If chrome needs scaling, scale only the chrome `Rectangle` borders/labels via `effectiveBezel/effectiveRadius`, as 0.1.3 does.
 * **Do not** set `smooth:true` on `frame` or `contentSurface` — it forces linear sampling. `antialiasing:true` on shape borders is fine.
 
-## 6. Troubleshooting
+## 6. Color Distortion (0.1.4)
+
+**What happened:** `src/main.cpp:22` injected `--force-dark-mode` + `--enable-features=WebUIDarkMode` into `QTWEBENGINE_CHROMIUM_FLAGS` for every start. Chromium then recolors every page (Bink’s “autodark”): light pages are inverted, *already-dark* pages (Sekiwa Cloud: `bg:#000`, lime `S` `#A3FF12` / `rgb(163,255,18)`) are desaturated to muted olive, contrast is crushed per profile. Compare Image 1 (bug: Sekiwa lime muted, blacks washed) vs Image 2 (expected: pure lime/black).
+
+**Fix `0.1.4`:** `src/main.cpp:18-32` no longer injects `--force-dark-mode`. User-supplied `QTWEBENGINE_CHROMIUM_FLAGS` are preserved verbatim; DevTools dark appearance is still handled by `qml/components/DeviceFrame.qml:71` `applyDevToolsDarkTheme()` (`Common.settings uiTheme='dark'`). If you need WebUI dark chrome only, add `--enable-features=WebUIDarkMode` externally — do not use `--force-dark-mode` for content.
+
+**Future rule:**
+* **DO:** Let the page’s own `prefers-color-scheme` win. Set `WebEngineView.backgroundColor: "transparent"` or page `bg` if you need a placeholder.
+* **DO NOT:** Add `--force-dark-mode`, `--enable-force-dark` or `blink-settings=forceDarkModeEnabled` unless you are writing an explicit “force dark” toggle — it globally recolors and breaks `color-scheme`, `lab()`/`oklch()` and image fidelity on every profile (`qml/theme/Theme.qml` is dark, but web content is not).
+* **If you must darken:** Use `QWebEngineSettings::ForceDarkMode` per-profile or inject a page-level `filter: invert()` in a `WebEngineScript` with `injectionPoint: DocumentCreation` + `worldId: MainWorld`, not a process flag.
+
+Check:
+```bash
+# should be empty / only user flags, not force-dark-mode
+echo $QTWEBENGINE_CHROMIUM_FLAGS
+QTWEBENGINE_CHROMIUM_FLAGS="" ./build/hesh  # lime S must be #A3FF12, not #8DBF3A
+# verify in DevTools: getComputedStyle(document.querySelector('.logo')).backgroundColor
+```
+
+## 7. Troubleshooting
 
 | Symptom | Cause | Fix |
 |---|---|---|
 | Blurry at `1.5` scale but crisp at `1.0` | Missing `PassThrough` or Hyprland rounding | Ensure `src/main.cpp` policy before `QGuiApplication`; `hyprctl monitors` should show `scale:1.5` |
 | Text crisp but images low-res on 3.0 profiles | `window.devicePixelRatio` still `1`/`1.5` | Check `syncDevicePixelRatio()` ran (load succeeded); console `window.devicePixelRatio` should be `3` |
+| Lime/green desaturated, blacks washed (Sekiwa) | `--force-dark-mode` in `src/main.cpp` | Remove flag as in 0.1.4; verify `QTWEBENGINE_CHROMIUM_FLAGS` empty; reload `about:blank` then URL |
 | `zoomFactor` warning `value 0.1 out of range` | `minimumPresentationScale` <0.25 | Bump to `0.25` as in `qml/components/DeviceFrame.qml:18` |
 | Desktop profile (1440) looks tiny at 0.4 zoom | Expected: `visual = 1440*0.4 = 576` DIPs; increase `availableWidth` or `presentationPadding` | Adjust `qml/pages/DeviceWorkspace.qml:89` or run standalone window for full size |
 | `httpUserAgent` not changing when switching device | `deviceProfile.instance().httpUserAgent` stale | `qml/components/DeviceFrame.qml:150` `onDeviceChanged` updates it |
 
-## 7. References
+## 8. References
 
 * `qml/components/DeviceFrame.qml:18-485` — presentation scale, effective metrics, zoom logic, DPR sync
 * `qml/components/StandaloneDeviceWindow.qml:20-31` — work-area initial scale (never upscale)
-* `src/main.cpp:34-38` — HiDPI PassThrough
+* `src/main.cpp:18-38` — HiDPI PassThrough + no force-dark-mode (0.1.4)
 * `src/devices/DeviceProfile.hpp:21-27` + `src/devices/DeviceProfile.cpp:25-43` — profile catalog
 * `docs/ARCHITECTURE.md:51-63` — logical viewport vs visual scale invariant
 
-When in doubt, keep `visual / zoom == viewportWidth/Height` and never scale the `WebEngineView` ancestor.
+When in doubt, keep `visual / zoom == viewportWidth/Height` and never scale the `WebEngineView` ancestor; never force dark on the renderer.
