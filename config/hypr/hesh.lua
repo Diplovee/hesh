@@ -10,3 +10,10 @@ o.window({ title = ".* — Hesh$" }, {
   no_blur = true,
   no_dim = true,
 })
+
+-- The main shell also owns the embedded preview. Keep it opaque so the
+-- compositor does not blend browser pixels with windows behind Hesh.
+o.window({ title = "^Hesh$" }, {
+  tag = "-default-opacity",
+  opacity = "1 1",
+})

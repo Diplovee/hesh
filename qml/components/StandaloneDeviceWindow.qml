@@ -23,10 +23,11 @@ Window {
                                                  ? Screen.desktopAvailableWidth : 1200
     readonly property real availableScreenHeight: Screen.desktopAvailableHeight > 0
                                                   ? Screen.desktopAvailableHeight : 675
+    readonly property real workAreaVerticalMargin: 64
     readonly property real initialPresentationScale: root.device
                                                      ? Math.min(1.0,
                                                                 Math.max(1, root.availableScreenWidth - 32) / root.viewportWidth,
-                                                                Math.max(1, root.availableScreenHeight - 32) / root.viewportHeight)
+                                                                Math.max(1, root.availableScreenHeight - root.workAreaVerticalMargin) / root.viewportHeight)
                                                      : 1.0
 
     signal closedByUser(string id)

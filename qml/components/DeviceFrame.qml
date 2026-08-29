@@ -157,6 +157,8 @@ Item {
         anchors.leftMargin: root.showDevTools ? 0 : (root.width - width) / 2
         scale: root.presentationScale
         transformOrigin: Item.Center
+        smooth: true
+        antialiasing: true
         radius: root.showChrome ? root.screenRadius : 0
         color: root.showChrome ? Theme.panelRaised : "transparent"
         border.width: root.showChrome ? 1 : 0
@@ -184,6 +186,7 @@ Item {
             color: "#0d1014"
             border.width: 0
             clip: true
+            smooth: true
 
             Rectangle {
                 anchors.fill: parent
@@ -236,7 +239,12 @@ Item {
                 z: 0
                 url: root.profileReady && root.device && root.device.status === "Running"
                      ? root.device.url : "about:blank"
+                // Keep page layout at the profile's logical viewport while
+                // retaining the GPU-backed raster path for crisp scaled output.
+                zoomFactor: 1.0
                 backgroundColor: "#0d1014"
+                settings.accelerated2dCanvasEnabled: true
+                settings.webGLEnabled: true
                 settings.fullScreenSupportEnabled: false
                 settings.javascriptEnabled: true
                 settings.localContentCanAccessRemoteUrls: true
