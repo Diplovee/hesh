@@ -1,6 +1,6 @@
 # Hesh
 
-Current version: **0.1.1**
+Current version: **0.1.2**
 
 Hesh is a lightweight Linux desktop environment for developing and testing
 web devices, with a future path to real Android virtual devices. It is a
@@ -73,6 +73,21 @@ Chromium data is never written into the source tree.
 On a Wayland compositor such as Hyprland, the application uses a frameless
 Qt Quick window and calls the compositor's system move operation for titlebar
 dragging. XWayland remains available through Qt's normal platform handling.
+
+### Hyprland integration
+
+The standalone-window rule is kept in [config/hypr/hesh.lua](config/hypr/hesh.lua)
+so it can be versioned with Hesh. Install it into Omarchy/Hyprland with:
+
+```bash
+mkdir -p ~/.config/hypr
+cp config/hypr/hesh.lua ~/.config/hypr/hesh.lua
+```
+
+Then add `require("hypr.hesh")` once to `~/.config/hypr/hyprland.lua` and
+reload the compositor with `hyprctl reload`. The rule floats and centers
+standalone device windows, keeps them opaque, and leaves compositor borders
+and shadows available.
 
 ## Architecture
 
