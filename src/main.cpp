@@ -19,18 +19,27 @@ int main(int argc, char* argv[])
     // Do NOT force dark mode on web content.  `--force-dark-mode` makes
     // Chromium recolor light pages and also desaturates already-dark pages
     // (e.g. lime #A3FF12 → muted olive) which breaks color fidelity per
-    // profile.  DevTools dark appearance is handled via JS in
+    // profile. DevTools dark appearance is handled via JS in
     // DeviceFrame.qml:applyDevToolsDarkTheme(), and WebUI dark is opt-in
-    // via WebEngineView background.  Preserve any user-supplied
-    // QTWEBENGINE_CHROMIUM_FLAGS verbatim.
+    // via WebEngineView background. Preserve user-supplied flags and add only
+    // the background-rendering guards required by persistent device surfaces.
+    // Chromium can otherwise treat a covered Wayland window like a background
+    // tab and stop producing frames after a workspace switch.
     auto chromiumFlags = qgetenv("QTWEBENGINE_CHROMIUM_FLAGS");
-    // Only ensure WebUI dark is available if user wants it; do not inject
-    // --force-dark-mode.  If the host OS is dark, Chromium will still
-    // report prefers-color-scheme:dark via the profile without recoloring.
-    // Keep flag handling explicit so future maintainers don't re-add it.
-    if (!chromiumFlags.isEmpty()) {
-        qputenv("QTWEBENGINE_CHROMIUM_FLAGS", chromiumFlags);
+    constexpr const char* renderingFlags[] = {
+        "--disable-background-timer-throttling",
+        "--disable-backgrounding-occluded-windows",
+        "--disable-renderer-backgrounding",
+    };
+    for (const auto* flag : renderingFlags) {
+        if (!chromiumFlags.contains(flag)) {
+            if (!chromiumFlags.isEmpty()) {
+                chromiumFlags.append(' ');
+            }
+            chromiumFlags.append(flag);
+        }
     }
+    qputenv("QTWEBENGINE_CHROMIUM_FLAGS", chromiumFlags);
     // HiDPI: use PassThrough for fractional scales (e.g. 1.25/1.5 on Hyprland)
     // so WebEngine renders at native physical resolution instead of rounded.
     QGuiApplication::setHighDpiScaleFactorRoundingPolicy(

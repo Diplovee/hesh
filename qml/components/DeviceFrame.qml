@@ -31,6 +31,10 @@ Item {
     property int devToolsWidth: 420
     property bool devToolsThemeApplied: false
     property int devToolsThemeAttempts: 0
+    // Briefly changed when a Wayland surface is exposed again. A tiny zoom
+    // transition makes Chromium submit a fresh frame without reloading the
+    // page or losing form/application state.
+    property real renderWakeNudge: 0
     // Effective chrome metrics scaled with presentation to keep border
     // proportions correct when we render without Item.scale transform.
     property real effectiveBezel: root.bezel * root.presentationScale
@@ -100,6 +104,10 @@ Item {
             devToolsThemeTimer.restart()
         } else {
             devToolsThemeTimer.stop()
+            // Detaching DevTools removes Chromium's viewport-size overlay
+            // from the inspected page. Repaint once so a label already on
+            // screen disappears immediately.
+            Qt.callLater(root.recoverSurface)
         }
     }
 
@@ -128,6 +136,13 @@ Item {
         }
     }
 
+    Timer {
+        id: renderWakeTimer
+        interval: 80
+        repeat: false
+        onTriggered: root.renderWakeNudge = 0
+    }
+
     // The WebEngineView is now sized directly to its visual size and its
     // zoomFactor is set to presentationScale. This keeps CSS viewport
     // (visual / zoom) at the profile's logical size while rendering at the
@@ -152,6 +167,42 @@ Item {
     function goForward() { webView.goForward() }
     function ensureActive() {
         if (webView) webView.lifecycleState = WebEngineView.LifecycleState.Active
+    }
+
+    function recoverSurface() {
+        if (!webView || !root.profileReady || !root.device) return
+
+        webView.lifecycleState = WebEngineView.LifecycleState.Active
+
+        var currentUrl = webView.url.toString()
+        if (currentUrl === "" || currentUrl === "about:blank") {
+            if (root.device.status === "Running") webView.reload()
+            return
+        }
+
+        if (root.pageFailed || webView.renderProcessPid === 0) {
+            reloadTimer.restart()
+            return
+        }
+
+        // Force a new Chromium/Qt Quick texture submission. The JavaScript
+        // nudge repaints the document; the fractional zoom change also repairs
+        // a stale imported GPU buffer on Wayland.
+        root.renderWakeNudge = root.renderWakeNudge === 0 ? 0.001 : -root.renderWakeNudge
+        renderWakeTimer.restart()
+        webView.runJavaScript(
+            "requestAnimationFrame(() => {" +
+            " window.dispatchEvent(new Event('resize'));" +
+            " document.documentElement.getBoundingClientRect();" +
+            "});")
+    }
+
+    Connections {
+        target: root.Window.window
+        function onActiveChanged() {
+            if (root.Window.window && root.Window.window.active && root.visible)
+                Qt.callLater(root.recoverSurface)
+        }
     }
 
     width: root.device
@@ -314,7 +365,9 @@ Item {
                 // keeps CSS viewport = visual / zoom = profile logical size
                 // while backing store = visual * Screen.devicePixelRatio is
                 // native and not bilinear-filtered. Clamped to WebEngine limits.
-                zoomFactor: Math.max(0.25, Math.min(5.0, root.presentationScale > 0 ? root.presentationScale : 1.0))
+                zoomFactor: Math.max(0.25, Math.min(5.0,
+                                                   (root.presentationScale > 0 ? root.presentationScale : 1.0)
+                                                   + root.renderWakeNudge))
                 backgroundColor: "#0d1014"
                 settings.accelerated2dCanvasEnabled: true
                 settings.webGLEnabled: true
@@ -324,7 +377,11 @@ Item {
                 lifecycleState: WebEngineView.LifecycleState.Active
                 // Keep rendering active even when briefly detached during
                 // Loader recreation or Wayland output changes.
-                onVisibleChanged: if (visible) lifecycleState = WebEngineView.LifecycleState.Active
+                onVisibleChanged: if (visible) Qt.callLater(root.recoverSurface)
+                onLifecycleStateChanged: {
+                    if (root.visible && lifecycleState !== WebEngineView.LifecycleState.Active)
+                        lifecycleState = WebEngineView.LifecycleState.Active
+                }
                 // Ensure high-DPI pixmaps and playback are crisp
                 onLoadProgressChanged: {
                     // Ignore the initial about:blank probe; it renders as a
@@ -532,7 +589,10 @@ Item {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.bottom: parent.bottom
-            inspectedView: webView
+            // Qt warns that leaving an invisible DevTools view attached can
+            // expose debug information (including the "width × height" resize
+            // overlay) in the inspected page.
+            inspectedView: root.showDevTools ? webView : null
             backgroundColor: Theme.panelRaised
             onLoadingChanged: function(loadRequest) {
                 if (loadRequest.status === WebEngineView.LoadStartedStatus) {

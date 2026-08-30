@@ -49,7 +49,15 @@ Window {
         if (root.device) root.deviceId = root.device.id
     }
 
-    onActiveChanged: root.focusChanged(root.deviceId, root.active)
+    onActiveChanged: {
+        root.focusChanged(root.deviceId, root.active)
+        if (root.active && browserLoader.item) {
+            Qt.callLater(function() {
+                if (root.active && browserLoader.item)
+                    browserLoader.item.recoverSurface()
+            })
+        }
+    }
 
     function focusWindow() {
         if (!root.visible) {
@@ -75,7 +83,7 @@ Window {
             Qt.callLater(function() {
                 if (!root.visible || !browserLoader.item) return
                 var f = browserLoader.item
-                if (f && f.ensureActive) f.ensureActive()
+                if (f && f.recoverSurface) f.recoverSurface()
                 // If the view is stuck on the dark placeholder (black
                 // screenshot) without loading or error, nudge it.
                 if (f && !f.pageLoaded && !f.pageLoading && !f.pageFailed) f.reloadPage()
