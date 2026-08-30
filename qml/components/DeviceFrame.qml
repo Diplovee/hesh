@@ -115,6 +115,19 @@ Item {
         }
     }
 
+    Timer {
+        id: reloadTimer
+        interval: 650
+        repeat: false
+        onTriggered: {
+            if (webView) {
+                root.pageFailed = false
+                root.pageError = ""
+                webView.reload()
+            }
+        }
+    }
+
     // The WebEngineView is now sized directly to its visual size and its
     // zoomFactor is set to presentationScale. This keeps CSS viewport
     // (visual / zoom) at the profile's logical size while rendering at the
@@ -137,6 +150,9 @@ Item {
     function reloadPage() { webView.reload() }
     function goBack() { webView.goBack() }
     function goForward() { webView.goForward() }
+    function ensureActive() {
+        if (webView) webView.lifecycleState = WebEngineView.LifecycleState.Active
+    }
 
     width: root.device
            ? (root.device.viewportWidth + root.bezel * 2) * root.presentationScale
@@ -188,6 +204,20 @@ Item {
         }
         webView.profile = profile
         root.profileReady = true
+        // On Wayland the first frame can be black until the view is
+        // explicitly activated; force Active once the profile is bound.
+        if (webView) webView.lifecycleState = WebEngineView.LifecycleState.Active
+    }
+
+    Component.onDestruction: {
+        // Stop any pending load so the shared profile isn't kept busy
+        // while the Loader's deferred destroy is still pending. This
+        // prevents "black on switch" when a new DeviceFrame reuses the
+        // same storageName before the old WebContents is torn down.
+        if (webView) {
+            webView.stop()
+            webView.lifecycleState = WebEngineView.LifecycleState.Discarded
+        }
     }
 
     Rectangle {
@@ -291,8 +321,16 @@ Item {
                 settings.fullScreenSupportEnabled: false
                 settings.javascriptEnabled: true
                 settings.localContentCanAccessRemoteUrls: true
+                lifecycleState: WebEngineView.LifecycleState.Active
+                // Keep rendering active even when briefly detached during
+                // Loader recreation or Wayland output changes.
+                onVisibleChanged: if (visible) lifecycleState = WebEngineView.LifecycleState.Active
                 // Ensure high-DPI pixmaps and playback are crisp
                 onLoadProgressChanged: {
+                    // Ignore the initial about:blank probe; it renders as a
+                    // solid backgroundColor (#0d1014) which looks "black" if we
+                    // hide the placeholder overlay too early (see screenshot).
+                    if (webView.url.toString() === "about:blank") return
                     // loadingChanged can arrive late for development servers.
                     // Reveal the page as soon as Chromium has rendered it.
                     if (loadProgress >= 100) {
@@ -303,23 +341,44 @@ Item {
                     }
                 }
                 onLoadingChanged: function(loadRequest) {
+                    // Swallow about:blank transitions – they are internal
+                    // to profileReady gating and should not flip the
+                    // placeholder overlay (otherwise you see a black rect).
+                    var isBlank = loadRequest.url.toString() === "about:blank"
+                    if (isBlank && loadRequest.status !== WebEngineView.LoadFailedStatus) return
                     if (loadRequest.status === WebEngineView.LoadStartedStatus) {
+                        // Don't show loading for about:blank
+                        if (isBlank) return
                         root.pageLoading = true
                         root.pageLoaded = false
                         root.pageFailed = false
                         root.pageError = ""
                     } else if (loadRequest.status === WebEngineView.LoadSucceededStatus) {
+                        if (isBlank) return
                         root.pageLoading = false
                         root.pageLoaded = true
                         root.pageFailed = false
                         root.syncDevicePixelRatio()
                     } else if (loadRequest.status === WebEngineView.LoadFailedStatus) {
+                        // about:blank never fails visibly; real URL failures do
+                        if (isBlank) return
                         root.pageLoading = false
                         root.pageLoaded = false
                         root.pageFailed = true
                         root.pageError = loadRequest.errorString || "Check that the URL is running."
                         console.info("Hesh WebDevice could not load", loadRequest.url, loadRequest.errorString)
                     }
+                }
+                onRenderProcessTerminated: function(terminationStatus, exitCode) {
+                    console.warn("Hesh WebEngine render process terminated", terminationStatus, exitCode, webView.url)
+                    root.pageLoading = false
+                    root.pageLoaded = false
+                    root.pageFailed = true
+                    root.pageError = "Renderer crashed (status " + terminationStatus + "). Retrying…"
+                    // Active lifecycle is required to restart the renderer;
+                    // Discarded/Frozen would stay black.
+                    lifecycleState = WebEngineView.LifecycleState.Active
+                    reloadTimer.restart()
                 }
             }
 

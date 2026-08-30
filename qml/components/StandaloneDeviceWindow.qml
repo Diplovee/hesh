@@ -56,6 +56,30 @@ Window {
         }
         root.raise()
         root.requestActivate()
+        // Wayland can create the surface black until the WebEngineView
+        // is forced back to Active after the window is mapped.
+        if (browserLoader.item) {
+            var frame = browserLoader.item
+            if (frame) {
+                if (frame.ensureActive) frame.ensureActive()
+                if (frame.pageFailed) frame.reloadPage()
+            }
+        }
+    }
+
+    onVisibleChanged: {
+        if (root.visible && browserLoader.item) {
+            // Give the compositor a frame to map the surface before
+            // forcing Active; otherwise the first paint stays #0d1014.
+            Qt.callLater(function() {
+                if (!root.visible || !browserLoader.item) return
+                var f = browserLoader.item
+                if (f && f.ensureActive) f.ensureActive()
+                // If the view is stuck on the dark placeholder (black
+                // screenshot) without loading or error, nudge it.
+                if (f && !f.pageLoaded && !f.pageLoading && !f.pageFailed) f.reloadPage()
+            })
+        }
     }
 
     // Main.qml calls this before restoring the embedded host. Keeping the

@@ -20,8 +20,29 @@ Item {
         // A Loader otherwise reuses the same DeviceFrame when selection
         // changes. Recreating it also recreates the WebEngineProfile binding,
         // keeping each device's browser data isolated.
+        // Skip the toggle entirely when the new device is detached to a
+        // standalone window – the embedded Loader is already inactive and
+        // toggling would leave frameEnabled false after the window closes
+        // (black placeholder bug seen in the screenshot).
+        if (root.standalone) return
+        // Capture the device that triggered this change; if the user
+        // switches again before the callLater fires, ignore the stale
+        // callback so we don't clobber the newer toggle.
+        var expectedId = root.device ? root.device.id : ""
         root.frameEnabled = false
-        Qt.callLater(function() { root.frameEnabled = true })
+        Qt.callLater(function() {
+            if (root.standalone) return
+            if (root.device && expectedId && root.device.id !== expectedId) return
+            root.frameEnabled = true
+        })
+    }
+
+    onStandaloneChanged: {
+        // When a standalone window closes, the embedded host must be
+        // re-enabled even if the last onDeviceChanged was skipped.
+        if (!root.standalone && !root.frameEnabled) {
+            root.frameEnabled = true
+        }
     }
 
     ColumnLayout {
