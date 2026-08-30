@@ -135,6 +135,11 @@ ApplicationWindow {
             host.deviceUnavailable.connect(function(unavailableId) {
                 window.finishStandalone(unavailableId || deviceId, host)
             })
+            host.mainWindowRequested.connect(function(requestedId) {
+                window.finishStandalone(requestedId || deviceId, host)
+                window.raise()
+                window.requestActivate()
+            })
             host.show()
             host.focusWindow()
         })

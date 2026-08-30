@@ -16,10 +16,12 @@ Popup {
     signal reloadRequested()
     signal backRequested()
     signal forwardRequested()
+    signal openBrowserRequested(string url)
+    signal mainWindowRequested()
     signal closeRequested()
 
-    width: 252
-    padding: 8
+    width: 190
+    padding: 6
     modal: false
     focus: true
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
@@ -43,15 +45,15 @@ Popup {
     }
 
     contentItem: ColumnLayout {
-        spacing: 3
+        spacing: 2
 
         ColumnLayout {
             Layout.fillWidth: true
-            Layout.leftMargin: 8
-            Layout.rightMargin: 8
-            Layout.topMargin: 3
-            Layout.bottomMargin: 5
-            spacing: 3
+            Layout.leftMargin: 7
+            Layout.rightMargin: 7
+            Layout.topMargin: 2
+            Layout.bottomMargin: 4
+            spacing: 2
 
             Text {
                 Layout.fillWidth: true
@@ -79,15 +81,15 @@ Popup {
 
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 34
+            Layout.preferredHeight: 30
             radius: 5
             color: root.itemColor(reloadMouse, true)
 
             Text {
                 anchors.left: parent.left
-                anchors.leftMargin: 10
+                anchors.leftMargin: 9
                 anchors.verticalCenter: parent.verticalCenter
-                text: "Reload Preview"
+                text: "Reload"
                 color: Theme.text
                 font.pixelSize: 12
             }
@@ -106,14 +108,14 @@ Popup {
 
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 34
+            Layout.preferredHeight: 30
             radius: 5
             color: root.itemColor(backMouse, root.canGoBack)
             opacity: root.canGoBack ? 1.0 : 0.45
 
             Text {
                 anchors.left: parent.left
-                anchors.leftMargin: 10
+                anchors.leftMargin: 9
                 anchors.verticalCenter: parent.verticalCenter
                 text: "Back"
                 color: Theme.text
@@ -135,14 +137,14 @@ Popup {
 
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 34
+            Layout.preferredHeight: 30
             radius: 5
             color: root.itemColor(forwardMouse, root.canGoForward)
             opacity: root.canGoForward ? 1.0 : 0.45
 
             Text {
                 anchors.left: parent.left
-                anchors.leftMargin: 10
+                anchors.leftMargin: 9
                 anchors.verticalCenter: parent.verticalCenter
                 text: "Forward"
                 color: Theme.text
@@ -164,21 +166,77 @@ Popup {
 
         Rectangle {
             Layout.fillWidth: true
+            Layout.topMargin: 2
+            Layout.bottomMargin: 2
             Layout.preferredHeight: 1
             color: Theme.border
         }
 
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 34
+            Layout.preferredHeight: 30
+            radius: 5
+            color: browserMouse.containsMouse ? Theme.panelSoft : "transparent"
+
+            Text {
+                anchors.left: parent.left
+                anchors.leftMargin: 9
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Open in Browser"
+                color: Theme.text
+                font.pixelSize: 12
+            }
+
+            MouseArea {
+                id: browserMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                    root.openBrowserRequested(root.device ? root.device.url : "")
+                    root.close()
+                }
+            }
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 30
+            radius: 5
+            color: mainWindowMouse.containsMouse ? Theme.panelSoft : "transparent"
+
+            Text {
+                anchors.left: parent.left
+                anchors.leftMargin: 9
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Main Window"
+                color: Theme.text
+                font.pixelSize: 12
+            }
+
+            MouseArea {
+                id: mainWindowMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                    root.close()
+                    root.mainWindowRequested()
+                }
+            }
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 30
             radius: 5
             color: closeMouse.containsMouse ? Theme.panelSoft : "transparent"
 
             Text {
                 anchors.left: parent.left
-                anchors.leftMargin: 10
+                anchors.leftMargin: 9
                 anchors.verticalCenter: parent.verticalCenter
-                text: "Close Standalone Window"
+                text: "Close Window"
                 color: Theme.error
                 font.pixelSize: 12
             }

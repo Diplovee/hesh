@@ -33,6 +33,7 @@ Window {
     signal closedByUser(string id)
     signal deviceUnavailable(string id)
     signal focusChanged(string id, bool focused)
+    signal mainWindowRequested(string id)
 
     visible: false
     flags: Qt.Window | Qt.FramelessWindowHint
@@ -152,6 +153,8 @@ Window {
             onReloadRequested: if (browserLoader.item) browserLoader.item.reloadPage()
             onBackRequested: if (browserLoader.item) browserLoader.item.goBack()
             onForwardRequested: if (browserLoader.item) browserLoader.item.goForward()
+            onOpenBrowserRequested: (url) => Qt.openUrlExternally(url)
+            onMainWindowRequested: root.mainWindowRequested(root.deviceId)
             onCloseRequested: root.close()
         }
     }
